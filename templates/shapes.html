@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Shapes — {{ ds.label }}{% endblock %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">My Datasets</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('datasets.view', owner_orcid=ds.orcid_id, slug=ds.slug) }}">{{ ds.label }}</a></li>
+    <li class="breadcrumb-item active">Shapes</li>
+  </ol>
+</nav>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h3>Shape Inference &amp; Validation</h3>
+</div>
+
+{% if current_user.is_authenticated and current_user.id == ds.user_id %}
+<div class="card mb-4">
+  <div class="card-body">
+    <h6>Infer shapes from uploaded data</h6>
+    <div class="d-flex gap-2 flex-wrap">
+      <button class="btn btn-outline-primary" onclick="infer('shexer')">
+        <i class="bi bi-diagram-2"></i> ShExer → ShEx
+      </button>
+      <button class="btn btn-outline-primary" onclick="infer('rudof_shex')">
+        <i class="bi bi-diagram-2"></i> RUDOF → ShEx
+      </button>
+      <button class="btn btn-outline-success" onclick="infer('rudof_shacl')">
+        <i class="bi bi-check2-square"></i> RUDOF → SHACL
+      </button>
+    </div>
+    <div id="inferStatus" class="mt-3"></div>
+  </div>
+</div>
+{% endif %}
+
+{% if shapes %}
+<h5>Inferred / Uploaded Shapes</h5>
+{% for sh in shapes %}
+<div class="card mb-3" id="shape-{{ sh.id }}">
+  <div class="card-header d-flex justify-content-between">
+    <span>
+      <span class="badge bg-primary">{{ sh.format|upper }}</span>
+      <span class="badge bg-secondary">{{ sh.source }}</span>
+      <small class="text-muted ms-2">{{ sh.created_at }}</small>
+    </span>
+    <div class="d-flex gap-2">
+      {% if current_user.is_authenticated and current_user.id == ds.user_id %}
+      <button class="btn btn-sm btn-outline-warning" onclick="validate({{ sh.id }})">
+        <i class="bi bi-check-circle"></i> Validate
+      </button>
+      {% endif %}
+      <a href="{{ url_for('shapes.download', owner_orcid=ds.orcid_id, slug=ds.slug, shape_id=sh.id, fmt='shex' if sh.format == 'shex' else 'ttl') }}"
+         class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-download"></i> .{{ 'shex' if sh.format == 'shex' else 'ttl' }}
+      </a>
+      {% if sh.mermaid %}
+      <a href="{{ url_for('shapes.download', owner_orcid=ds.orcid_id, slug=ds.slug, shape_id=sh.id, fmt='mermaid') }}"
+         class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-download"></i> .mmd
+      </a>
+      {% endif %}
+    </div>
+  </div>
+  <div class="card-body">
+    {% if sh.mermaid %}
+    <div class="mermaid mb-3">{{ sh.mermaid }}</div>
+    {% endif %}
+    <details>
+      <summary class="text-muted small">Show raw schema</summary>
+      <pre class="shex mt-2">{{ sh.content }}</pre>
+    </details>
+    <div id="validate-result-{{ sh.id }}" class="mt-2"></div>
+  </div>
+</div>
+{% endfor %}
+{% else %}
+<p class="text-muted">No shapes yet. Use the buttons above to infer from your data.</p>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const OWNER  = '{{ ds.orcid_id }}';
+const SLUG   = '{{ ds.slug }}';
+
+async function infer(tool) {
+  const status = document.getElementById('inferStatus');
+  status.innerHTML = '<div class="spinner-border spinner-border-sm"></div> Inferring shapes…';
+  try {
+    const r = await fetch(`/u/${OWNER}/${SLUG}/shapes/infer`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({tool})
+    });
+    const d = await r.json();
+    if (d.id) {
+      status.innerHTML = '<div class="alert alert-success">Shapes inferred. <a href="">Reload</a> to view.</div>';
+    } else {
+      status.innerHTML = '<div class="alert alert-danger">' + (d.error || 'Inference failed') + '</div>';
+    }
+  } catch(e) {
+    status.innerHTML = '<div class="alert alert-danger">Error: ' + e + '</div>';
+  }
+}
+
+async function validate(shapeId) {
+  const el = document.getElementById('validate-result-' + shapeId);
+  el.innerHTML = '<div class="spinner-border spinner-border-sm"></div> Validating…';
+  try {
+    const r = await fetch(`/u/${OWNER}/${SLUG}/shapes/validate`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({shape_id: shapeId})
+    });
+    const d = await r.json();
+    const cls = d.valid ? 'success' : 'warning';
+    el.innerHTML = `<div class="alert alert-${cls}"><strong>${d.valid ? 'Valid' : 'Violations found'}</strong><pre class="mt-2 mb-0" style="font-size:.75rem">${d.report}</pre></div>`;
+  } catch(e) {
+    el.innerHTML = '<div class="alert alert-danger">Error: ' + e + '</div>';
+  }
+}
+</script>
+{% endblock %}

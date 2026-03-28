@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}My Datasets{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2>My Datasets</h2>
+  <a href="{{ url_for('dashboard.new_dataset') }}" class="btn btn-primary">
+    <i class="bi bi-plus-lg"></i> New Dataset
+  </a>
+</div>
+
+{% if datasets %}
+<div class="row g-3">
+  {% for ds in datasets %}
+  <div class="col-12">
+    <div class="card card-dataset shadow-sm">
+      <div class="card-body">
+        <div class="d-flex justify-content-between">
+          <div>
+            <h5 class="mb-1">
+              <a href="{{ url_for('datasets.view', owner_orcid=current_user.orcid_id, slug=ds.slug) }}" class="text-decoration-none">
+                {{ ds.label }}
+              </a>
+              {% if not ds.is_public %}<span class="badge bg-secondary ms-1">private</span>{% endif %}
+            </h5>
+            {% if ds.description %}<p class="text-muted small mb-1">{{ ds.description }}</p>{% endif %}
+            <small class="text-muted"><i class="bi bi-link-45deg"></i> {{ ds.graph_base }}</small>
+          </div>
+          <div class="d-flex gap-2 align-items-start">
+            <a href="{{ url_for('datasets.sparql_endpoint', owner_orcid=current_user.orcid_id, slug=ds.slug) }}" class="btn btn-sm btn-outline-primary" title="SPARQL"><i class="bi bi-search"></i></a>
+            <a href="{{ url_for('examples.list_examples', owner_orcid=current_user.orcid_id, slug=ds.slug) }}" class="btn btn-sm btn-outline-secondary" title="Examples"><i class="bi bi-collection"></i></a>
+            <a href="{{ url_for('shapes.view', owner_orcid=current_user.orcid_id, slug=ds.slug) }}" class="btn btn-sm btn-outline-secondary" title="Shapes"><i class="bi bi-diagram-2"></i></a>
+            <a href="{{ url_for('sparqlist.list_queries', owner_orcid=current_user.orcid_id, slug=ds.slug) }}" class="btn btn-sm btn-outline-secondary" title="API"><i class="bi bi-braces"></i></a>
+          </div>
+        </div>
+        <small class="text-muted">Created {{ ds.created_at }}</small>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="text-center text-muted mt-5">
+  <i class="bi bi-inbox display-4"></i>
+  <p class="mt-3">No datasets yet. <a href="{{ url_for('dashboard.new_dataset') }}">Create your first one.</a></p>
+</div>
+{% endif %}
+{% endblock %}

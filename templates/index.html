@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Welcome{% endblock %}
+{% block content %}
+<div class="row justify-content-center mt-5">
+  <div class="col-lg-8 text-center">
+    <h1 class="display-5 fw-bold" style="color:var(--koetai-blue)">
+      <i class="bi bi-diagram-3"></i> Koetai
+    </h1>
+    <p class="lead text-muted">A FAIR SPARQL endpoint platform — publish, query, validate and share RDF datasets.</p>
+    <div class="row g-3 mt-4 text-start">
+      <div class="col-md-4">
+        <div class="card h-100 shadow-sm">
+          <div class="card-body">
+            <h6><i class="bi bi-upload text-primary"></i> Upload RDF</h6>
+            <small class="text-muted">Turtle, N-Triples, RDF/XML and more. Your data gets a public SPARQL endpoint instantly.</small>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card h-100 shadow-sm">
+          <div class="card-body">
+            <h6><i class="bi bi-check2-circle text-success"></i> Validate Shapes</h6>
+            <small class="text-muted">Infer ShEx or SHACL schemas with ShExer &amp; RUDOF. Validate and download Mermaid diagrams.</small>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card h-100 shadow-sm">
+          <div class="card-body">
+            <h6><i class="bi bi-braces text-warning"></i> REST API</h6>
+            <small class="text-muted">Turn any SPARQL query into a REST endpoint with SPARQLList-style parameterized templates.</small>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="mt-5">
+      {% if not current_user.is_authenticated %}
+      <p class="text-muted">Koetai is invitation-only. If you have an invite link, click it to register.</p>
+      <a href="{{ url_for('auth.login') }}" class="btn btn-primary btn-lg">
+        <img src="https://orcid.org/sites/default/files/images/orcid_16x16.png" width="16" class="me-1"> Sign in with ORCID
+      </a>
+      {% else %}
+      <a href="{{ url_for('dashboard.index') }}" class="btn btn-primary btn-lg">Go to My Datasets</a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
