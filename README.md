@@ -4,6 +4,15 @@
 
 Live instance: **https://koetai.semscape.org**
 
+### Repositories
+
+This project is hosted on two forges. **Codeberg is the primary repository** — all issues, feature requests, and pull requests should be filed there. GitHub is a secondary mirror.
+
+| Forge | URL | Role |
+|---|---|---|
+| **Codeberg** (primary) | https://codeberg.org/andrawaag/koetai-platform | Issues, PRs, development |
+| GitHub (mirror) | https://github.com/Koetai/koetai-platform | Read-only mirror |
+
 ---
 
 ## Features
