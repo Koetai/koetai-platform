@@ -9,39 +9,101 @@
 </div>
 
 {% if datasets %}
-<div class="row g-3">
+{% if datasets|length > 4 %}
+<div class="mb-3">
+  <input type="search" id="dsFilter" class="form-control" placeholder="Filter datasets…"
+         oninput="filterDatasets(this.value)">
+</div>
+{% endif %}
+<div class="row g-3" id="dsCards">
   {% for ds in datasets %}
-  <div class="col-12">
+  <div class="col-12 ds-card-wrap" data-label="{{ ds.label|lower }} {{ ds.description|lower if ds.description else '' }} {{ ds.slug|lower }}">
     <div class="card card-dataset shadow-sm">
       <div class="card-body">
-        <div class="d-flex justify-content-between">
-          <div>
-            <h5 class="mb-1">
-              <a href="{{ url_for('datasets.view', owner_orcid=current_user.orcid_id, slug=ds.slug) }}" class="text-decoration-none">
-                {{ ds.label }}
-              </a>
-              {% if not ds.is_public %}<span class="badge bg-secondary ms-1">private</span>{% endif %}
-            </h5>
-            {% if ds.description %}<p class="text-muted small mb-1">{{ ds.description }}</p>{% endif %}
-            <small class="text-muted"><i class="bi bi-link-45deg"></i> {{ ds.graph_base }}</small>
+        <div class="d-flex justify-content-between align-items-start">
+          <div class="flex-grow-1 me-3">
+            <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+              <h5 class="mb-0">
+                <a href="{{ url_for('datasets.view', owner_orcid=current_user.orcid_id, slug=ds.slug) }}"
+                   class="text-decoration-none">{{ ds.label }}</a>
+              </h5>
+              <span class="badge bg-{{ 'dark' if ds.platform == 'qlever' else 'warning text-dark' }} fw-normal">
+                {{ ds.platform }}
+              </span>
+              {% if not ds.is_public %}<span class="badge bg-secondary fw-normal">private</span>{% endif %}
+            </div>
+            {% if ds.description %}
+            <p class="text-muted small mb-2">{{ ds.description }}</p>
+            {% endif %}
+            <div class="d-flex flex-wrap gap-3 text-muted small">
+              {% if ds.git_count %}
+              <span><i class="bi bi-git"></i> {{ ds.git_count }} git source{{ 's' if ds.git_count != 1 else '' }}</span>
+              {% endif %}
+              {% if ds.web_count %}
+              <span><i class="bi bi-globe2"></i> {{ ds.web_count }} web source{{ 's' if ds.web_count != 1 else '' }}</span>
+              {% endif %}
+              {% if ds.shape_count %}
+              <span><i class="bi bi-diagram-2"></i> {{ ds.shape_count }} shape{{ 's' if ds.shape_count != 1 else '' }}</span>
+              {% endif %}
+              <span><i class="bi bi-clock"></i> {{ ds.created_at[:10] }}</span>
+            </div>
           </div>
-          <div class="d-flex gap-2 align-items-start">
-            <a href="{{ url_for('datasets.sparql_endpoint', owner_orcid=current_user.orcid_id, slug=ds.slug) }}" class="btn btn-sm btn-outline-primary" title="SPARQL"><i class="bi bi-search"></i></a>
-            <a href="{{ url_for('examples.list_examples', owner_orcid=current_user.orcid_id, slug=ds.slug) }}" class="btn btn-sm btn-outline-secondary" title="Examples"><i class="bi bi-collection"></i></a>
-            <a href="{{ url_for('shapes.view', owner_orcid=current_user.orcid_id, slug=ds.slug) }}" class="btn btn-sm btn-outline-secondary" title="Shapes"><i class="bi bi-diagram-2"></i></a>
-            <a href="{{ url_for('sparqlist.list_queries', owner_orcid=current_user.orcid_id, slug=ds.slug) }}" class="btn btn-sm btn-outline-secondary" title="API"><i class="bi bi-braces"></i></a>
-          </div>
+          <a href="{{ url_for('datasets.view', owner_orcid=current_user.orcid_id, slug=ds.slug) }}"
+             class="btn btn-sm btn-outline-primary text-nowrap">
+            Open <i class="bi bi-arrow-right"></i>
+          </a>
         </div>
-        <small class="text-muted">Created {{ ds.created_at }}</small>
       </div>
     </div>
   </div>
   {% endfor %}
 </div>
+
 {% else %}
-<div class="text-center text-muted mt-5">
-  <i class="bi bi-inbox display-4"></i>
-  <p class="mt-3">No datasets yet. <a href="{{ url_for('dashboard.new_dataset') }}">Create your first one.</a></p>
+<!-- Onboarding empty state -->
+<div class="row justify-content-center mt-4">
+  <div class="col-lg-7">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body p-4 text-center">
+        <i class="bi bi-inbox display-3 text-muted"></i>
+        <h4 class="mt-3">Welcome to Koetai</h4>
+        <p class="text-muted">You don't have any datasets yet. Here's how to get started:</p>
+        <ol class="text-start mt-3 mb-4">
+          <li class="mb-2">
+            <strong>Create a dataset</strong> — give it a name, choose QLever (fast, large data)
+            or Fuseki (updateable).
+          </li>
+          <li class="mb-2">
+            <strong>Load RDF data</strong> — upload a file directly, pull from a GitHub/GitLab
+            repository, or import from a download page like Orphadata or WikiPathways.
+          </li>
+          <li class="mb-2">
+            <strong>Query &amp; share</strong> — your data gets a public SPARQL endpoint, shape
+            inference, and a REST API immediately.
+          </li>
+        </ol>
+        <a href="{{ url_for('dashboard.new_dataset') }}" class="btn btn-primary btn-lg">
+          <i class="bi bi-plus-lg"></i> Create your first dataset
+        </a>
+        <p class="mt-3 mb-0">
+          <a href="{{ url_for('helppage') }}" class="text-muted small">
+            <i class="bi bi-book"></i> Read the full documentation
+          </a>
+        </p>
+      </div>
+    </div>
+  </div>
 </div>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function filterDatasets(q) {
+  const term = q.toLowerCase();
+  document.querySelectorAll('.ds-card-wrap').forEach(el => {
+    el.style.display = el.dataset.label.includes(term) ? '' : 'none';
+  });
+}
+</script>
 {% endblock %}

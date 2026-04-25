@@ -1,0 +1,24 @@
+{
+  "claude_plan": "Pro",
+  "extra_storage_gb": 0,
+  "history": [
+    {
+      "key": "2026-03",
+      "year": 2026,
+      "month": 3,
+      "vm": 43.75,
+      "storage": 0.0,
+      "claude": 18,
+      "total": 61.75
+    },
+    {
+      "key": "2026-04",
+      "year": 2026,
+      "month": 4,
+      "vm": 43.75,
+      "storage": 0.0,
+      "claude": 18,
+      "total": 61.75
+    }
+  ]
+}

@@ -24,7 +24,7 @@ def list_examples(owner_orcid, slug):
     ds = _get_dataset(owner_orcid, slug)
     if not ds:
         flash("Dataset not found.", "error")
-        return redirect(url_for("main.index"))
+        return redirect(url_for("index"))
 
     db = get_db()
     examples = db.execute(
@@ -32,6 +32,19 @@ def list_examples(owner_orcid, slug):
         (ds["id"],)
     ).fetchall()
     return render_template("examples.html", ds=ds, examples=examples)
+
+
+@bp.route("/<owner_orcid>/<slug>/examples/list")
+def list_examples_json(owner_orcid, slug):
+    """JSON list for inline loading in the SPARQL editor."""
+    ds = _get_dataset(owner_orcid, slug)
+    if not ds:
+        return jsonify([])
+    examples = get_db().execute(
+        "SELECT label, description, query, keywords FROM examples WHERE dataset_id=? ORDER BY label",
+        (ds["id"],)
+    ).fetchall()
+    return jsonify([dict(e) for e in examples])
 
 
 @bp.route("/<owner_orcid>/<slug>/examples/new", methods=["GET", "POST"])

@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+{% from '_ds_nav.html' import ds_nav with context %}
+{% block title %}Upload — {{ ds.label }}{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">My Datasets</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('datasets.view', owner_orcid=ds.orcid_id, slug=ds.slug) }}">{{ ds.label }}</a></li>
+    <li class="breadcrumb-item active">Upload</li>
+  </ol>
+</nav>
+
+{{ ds_nav(ds, 'upload') }}
+
+{% if current_user.is_authenticated and current_user.id == ds.user_id %}
+<div class="card" style="max-width:600px">
+  <div class="card-header fw-semibold"><i class="bi bi-upload"></i> Upload RDF Data</div>
+  <div class="card-body">
+    <p class="text-muted small">
+      Supported: <code>.ttl</code> <code>.nt</code> <code>.n3</code> <code>.rdf</code>
+      <code>.owl</code> <code>.trig</code> <code>.nq</code> <code>.jsonld</code> — max 500 MB.
+      Files are appended to the dataset's named graph; existing triples are not removed.
+    </p>
+    <form id="uploadForm">
+      <div class="mb-3">
+        <label class="form-label">RDF file</label>
+        <input type="file" class="form-control" id="rdfFile"
+               accept=".ttl,.nt,.n3,.rdf,.owl,.trig,.nq,.jsonld" required>
+      </div>
+
+      <div class="mb-3 border rounded p-3 bg-light" id="owlPanel" style="display:none">
+        <div class="form-check mb-2">
+          <input class="form-check-input" type="checkbox" id="applyOwl" name="apply_owl">
+          <label class="form-check-label fw-semibold" for="applyOwl">
+            Apply OWL/RDFS reasoning before indexing
+          </label>
+        </div>
+        <div id="owlOptions" style="display:none">
+          <label class="form-label small text-muted">Reasoning regime</label>
+          <select class="form-select form-select-sm w-auto" id="owlRegime" name="owl_regime">
+            <option value="RDFS" selected>RDFS (fast — seconds, recommended)</option>
+            <option value="OWL_RL">OWL RL (slow for large files — may take hours)</option>
+            <option value="OWL_RL_Extras">OWL RL + Extensions (slowest)</option>
+          </select>
+          <div id="owlWarn" class="alert alert-warning py-1 px-2 mt-2 small" style="display:none">
+            <i class="bi bi-exclamation-triangle"></i>
+            <strong>OWL RL on large files can take hours.</strong>
+            The job runs in the background — you can close this tab and check back.
+            Consider <strong>RDFS</strong> for faster results.
+          </div>
+          <div class="form-text mt-1">Materializes inferred triples before loading. Runs as a background job.</div>
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="replaceData">
+          <label class="form-check-label" for="replaceData">
+            Replace existing data <span class="text-muted small">(clears all triples in this graph before loading)</span>
+          </label>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary" id="uploadBtn">
+        <i class="bi bi-upload"></i> Upload &amp; Index
+      </button>
+    </form>
+    <div id="uploadStatus" class="mt-3"></div>
+  </div>
+</div>
+{% else %}
+<div class="alert alert-secondary">Only the dataset owner can upload data.</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if current_user.is_authenticated and current_user.id == ds.user_id %}
+<script>
+const OWL_EXTS = ['.owl', '.rdf'];
+
+document.getElementById('rdfFile').addEventListener('change', function() {
+  const name = this.files[0]?.name || '';
+  const ext  = name.slice(name.lastIndexOf('.')).toLowerCase();
+  document.getElementById('owlPanel').style.display = OWL_EXTS.includes(ext) ? '' : 'none';
+});
+
+document.getElementById('applyOwl').addEventListener('change', function() {
+  document.getElementById('owlOptions').style.display = this.checked ? '' : 'none';
+});
+
+document.getElementById('owlRegime').addEventListener('change', function() {
+  const warn = document.getElementById('owlWarn');
+  warn.style.display = this.value.startsWith('OWL_RL') ? '' : 'none';
+});
+
+const POLL_INTERVAL = 3000; // ms
+let pollTimer = null;
+
+document.getElementById('uploadForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const btn    = document.getElementById('uploadBtn');
+  const status = document.getElementById('uploadStatus');
+  const file   = document.getElementById('rdfFile').files[0];
+  if (!file) return;
+
+  const applyOwl    = document.getElementById('applyOwl').checked;
+  const owlRegime   = document.getElementById('owlRegime').value;
+  const replaceData = document.getElementById('replaceData').checked;
+  const fd = new FormData();
+  fd.append('rdf_file', file);
+  fd.append('apply_owl', applyOwl ? 'true' : 'false');
+  fd.append('owl_regime', owlRegime);
+  fd.append('replace_data', replaceData ? 'true' : 'false');
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Uploading file…';
+  status.innerHTML = '';
+
+  try {
+    const r = await fetch('{{ url_for("datasets.upload", owner_orcid=ds.orcid_id, slug=ds.slug) }}',
+      { method: 'POST', body: fd });
+    const d = await r.json();
+    if (d.error) {
+      status.innerHTML = '<div class="alert alert-danger">' + d.error + '</div>';
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-upload"></i> Upload &amp; Index';
+      return;
+    }
+    // File saved, job queued — start polling
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Processing…';
+    startPolling(d.job_id, d.graph, applyOwl, owlRegime, status, btn);
+  } catch(err) {
+    status.innerHTML = '<div class="alert alert-danger">Upload error: ' + err + '</div>';
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-upload"></i> Upload &amp; Index';
+  }
+});
+
+function startPolling(jobId, graph, applyOwl, regime, statusEl, btn) {
+  const phaseLabels = {
+    queued:    'Queued…',
+    parsing:   'Parsing RDF…',
+    reasoning: applyOwl ? `Applying ${regime} reasoning…` : 'Processing…',
+    loading:   'Loading into triplestore…',
+    done:      'Complete',
+    error:     'Error',
+  };
+
+  clearTimeout(pollTimer);
+
+  async function poll() {
+    try {
+      const r = await fetch('{{ url_for("datasets.upload_status", owner_orcid=ds.orcid_id, slug=ds.slug, job_id="__JOB__") }}'.replace('__JOB__', jobId));
+      const d = await r.json();
+
+      const phase   = d.phase || d.status;
+      const label   = phaseLabels[phase] || phase;
+      const elapsed = d.created_at ? '' : '';
+
+      if (d.status === 'done') {
+        statusEl.innerHTML = `
+          <div class="alert alert-success">
+            <strong>Upload complete.</strong> Indexed into <code>${graph}</code><br>
+            ${d.message ? '<small class="text-muted"><i class="bi bi-gear"></i> ' + d.message + '</small><br>' : ''}
+            <a href="{{ url_for("datasets.view", owner_orcid=ds.orcid_id, slug=ds.slug) }}">← Back to dataset overview</a>
+          </div>`;
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-upload"></i> Upload &amp; Index';
+        return;
+      }
+
+      if (d.status === 'error') {
+        statusEl.innerHTML = `<div class="alert alert-danger"><strong>Failed:</strong> ${d.message || 'Unknown error'}</div>`;
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-upload"></i> Upload &amp; Index';
+        return;
+      }
+
+      // Still running
+      statusEl.innerHTML = `
+        <div class="alert alert-info d-flex align-items-center gap-2">
+          <span class="spinner-border spinner-border-sm flex-shrink-0"></span>
+          <div>
+            <strong>${label}</strong>
+            ${d.message ? '<br><small>' + d.message + '</small>' : ''}
+            ${applyOwl && regime.startsWith('OWL_RL') ? '<br><small class="text-muted">OWL RL reasoning can take a long time on large ontologies — the job continues in the background even if you close this tab.</small>' : ''}
+          </div>
+        </div>`;
+      btn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> ${label}`;
+
+      pollTimer = setTimeout(poll, POLL_INTERVAL);
+    } catch(err) {
+      pollTimer = setTimeout(poll, POLL_INTERVAL * 2);
+    }
+  }
+
+  poll();
+}
+</script>
+{% endif %}
+{% endblock %}

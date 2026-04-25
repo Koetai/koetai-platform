@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Preview · {{ ds.slug }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h4 class="mb-0 fw-bold">Step 4 — Preview Triples</h4>
+    <div class="text-muted small">First 20 rows converted · review before loading</div>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('datasets.mapping_page', owner_orcid=ds.orcid_id, slug=ds.slug, file=mapping.filename) }}"
+       class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i> Back to mapping
+    </a>
+    <form method="post"
+          action="{{ url_for('datasets.mapping_load', owner_orcid=ds.orcid_id, slug=ds.slug) }}">
+      <input type="hidden" name="mapping_json" value="{{ mapping|tojson }}">
+      <button type="submit" class="btn btn-sm btn-success">
+        <i class="bi bi-cloud-upload"></i> Load into triplestore
+      </button>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header fw-semibold small">
+    <i class="bi bi-braces"></i> Sample triples (Turtle)
+  </div>
+  <div class="card-body p-0">
+    <pre class="shex m-0" style="border-radius:0; max-height:500px">{{ preview_ttl }}</pre>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}FDP Dataset — {{ ds.label }}{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-9">
+
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('fdp.repository') }}">FAIR Data Point</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('fdp.catalog', orcid=user.orcid_id) }}">{{ user.name or user.orcid_id }}</a></li>
+        <li class="breadcrumb-item active">{{ ds.label }}</li>
+      </ol>
+    </nav>
+
+    <div class="d-flex align-items-start gap-3 mb-4">
+      <div class="flex-grow-1">
+        <h2 class="mb-1"><i class="bi bi-database text-primary"></i> {{ ds.label }}</h2>
+        {% if ds.description %}<p class="text-muted mb-2">{{ ds.description }}</p>{% endif %}
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+          <span class="badge bg-secondary">v{{ ds.fdp_version }}</span>
+          {% if ds.fdp_keywords %}
+            {% for kw in ds.fdp_keywords.split(',') %}
+              {% if kw.strip() %}<span class="badge bg-light text-dark border">{{ kw.strip() }}</span>{% endif %}
+            {% endfor %}
+          {% endif %}
+        </div>
+      </div>
+      <div class="d-flex flex-column align-items-end gap-1">
+        <a href="{{ dataset_uri }}" class="btn btn-sm btn-outline-secondary"
+           title="View as Turtle">
+          <i class="bi bi-file-earmark-code"></i> Turtle
+        </a>
+        <code class="text-muted" style="font-size:.65rem">curl -H 'Accept: text/turtle' {{ dataset_uri }}</code>
+      </div>
+    </div>
+
+    <!-- Metadata -->
+    <div class="card mb-4">
+      <div class="card-header fw-semibold">Dataset Metadata</div>
+      <table class="table table-sm mb-0">
+        <tbody>
+          <tr><th class="w-25 text-muted small">Identifier</th>
+              <td><code class="small">{{ dataset_uri }}</code></td></tr>
+          <tr><th class="text-muted small">Publisher</th>
+              <td>{{ user.name or user.orcid_id }}
+                  <a href="https://orcid.org/{{ user.orcid_id }}" target="_blank" class="ms-1 small">
+                    <img src="https://orcid.org/sites/default/files/images/orcid_16x16.png" width="14"> {{ user.orcid_id }}
+                  </a></td></tr>
+          <tr><th class="text-muted small">License</th>
+              <td><a href="{{ ds.fdp_license }}" target="_blank" class="small">{{ ds.fdp_license }}</a></td></tr>
+          {% if ds.fdp_theme %}
+          <tr><th class="text-muted small">Theme</th>
+              <td><a href="{{ ds.fdp_theme }}" target="_blank" class="small">{{ ds.fdp_theme }}</a></td></tr>
+          {% endif %}
+          <tr><th class="text-muted small">Created</th>
+              <td class="small">{{ ds.created_at }}</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Distributions -->
+    <h5 class="mb-3"><i class="bi bi-plug text-warning"></i> Distributions
+      <span class="badge bg-secondary ms-1">{{ distributions|length }}</span>
+    </h5>
+
+    {% for dist in distributions %}
+    <div class="card mb-3">
+      <div class="card-header d-flex justify-content-between align-items-center py-2">
+        <span class="fw-semibold">
+          <i class="bi {{ dist.icon }}"></i>
+          {{ dist.title }}
+          <span class="badge bg-light text-dark border ms-1 fw-normal small">{{ dist.type }}</span>
+        </span>
+        <a href="{{ dist.uri }}" class="btn btn-sm btn-outline-secondary" title="Distribution metadata (Turtle)">
+          <i class="bi bi-file-earmark-code"></i>
+        </a>
+      </div>
+      <div class="card-body py-2">
+        <table class="table table-sm mb-0 small">
+          <tbody>
+            <tr><th class="text-muted w-25">Access URL</th>
+                <td><a href="{{ dist.access }}" target="_blank" class="text-break">{{ dist.access }}</a></td></tr>
+            <tr><th class="text-muted">Media type</th>
+                <td><code>{{ dist.media }}</code></td></tr>
+            {% if dist.branch is defined and dist.branch %}
+            <tr><th class="text-muted">Branch</th>
+                <td><code>{{ dist.branch }}</code></td></tr>
+            {% endif %}
+            {% if dist.imported %}
+            <tr><th class="text-muted">Last imported</th>
+                <td>{{ dist.imported }}</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+
+        {% if dist.type == 'sparql' %}
+        <div class="mt-2 d-flex gap-2">
+          <a href="{{ sparql_uri }}?query=SELECT+%2A+WHERE%7B+%3Fs+%3Fp+%3Fo+%7D+LIMIT+10"
+             target="_blank" class="btn btn-sm btn-primary">
+            <i class="bi bi-play-circle"></i> Try SPARQL
+          </a>
+          <a href="{{ url_for('datasets.sparql_endpoint', owner_orcid=user.orcid_id, slug=ds.slug) }}"
+             class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-braces"></i> Open editor
+          </a>
+        </div>
+        {% endif %}
+
+        {% if dist.files %}
+        <div class="mt-2">
+          <div class="text-muted small mb-1">Imported files ({{ dist.files|length }}):</div>
+          <ul class="list-unstyled mb-0 ms-2">
+            {% for f in dist.files %}
+            <li class="small">
+              <a href="{{ f.url }}" target="_blank"><i class="bi bi-file-earmark-code"></i> {{ f.filename }}</a>
+              {% if f.last_modified %}<span class="text-muted ms-1">{{ f.last_modified }}</span>{% endif %}
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+
+    <div class="mt-3">
+      <a href="{{ url_for('datasets.sparql_endpoint', owner_orcid=user.orcid_id, slug=ds.slug) }}"
+         class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-braces"></i> Open SPARQL editor
+      </a>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

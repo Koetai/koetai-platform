@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}FDP Catalog — {{ user.name or user.orcid_id }}{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-9">
+
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('fdp.repository') }}">FAIR Data Point</a></li>
+        <li class="breadcrumb-item active">{{ user.name or user.orcid_id }}</li>
+      </ol>
+    </nav>
+
+    <div class="d-flex align-items-center gap-3 mb-3">
+      <div>
+        <h2 class="mb-0"><i class="bi bi-collection text-success"></i> {{ user.name or user.orcid_id }}</h2>
+        <p class="text-muted mb-0">DCAT Catalog · ORCID: <code>{{ user.orcid_id }}</code></p>
+      </div>
+      <a href="{{ catalog_uri }}" class="btn btn-sm btn-outline-secondary ms-auto"
+         title="Get as Turtle">
+        <i class="bi bi-file-earmark-code"></i> Turtle
+      </a>
+    </div>
+
+    {% if datasets %}
+    <div class="list-group mb-4">
+      {% for ds in datasets %}
+      <a href="{{ url_for('fdp.dataset', orcid=user.orcid_id, slug=ds.slug) }}"
+         class="list-group-item list-group-item-action">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <div class="fw-semibold"><i class="bi bi-database text-primary"></i> {{ ds.label }}</div>
+            {% if ds.description %}
+            <div class="text-muted small mt-1">{{ ds.description }}</div>
+            {% endif %}
+            <div class="mt-1">
+              {% if ds.fdp_keywords %}
+                {% for kw in ds.fdp_keywords.split(',') %}
+                  {% if kw.strip() %}<span class="badge bg-light text-dark border me-1">{{ kw.strip() }}</span>{% endif %}
+                {% endfor %}
+              {% endif %}
+            </div>
+          </div>
+          <span class="badge bg-secondary ms-3">v{{ ds.fdp_version }}</span>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-muted">No public datasets in this catalog.</p>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}

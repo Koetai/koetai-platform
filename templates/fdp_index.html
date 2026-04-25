@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}FAIR Data Point{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-9">
+
+    <div class="d-flex align-items-center gap-3 mb-3">
+      <div>
+        <h2 class="mb-0"><i class="bi bi-award text-primary"></i> FAIR Data Point</h2>
+        <p class="text-muted mb-0">Koetai FAIR SPARQL Platform — machine-readable metadata for all public datasets</p>
+      </div>
+      <div class="ms-auto">
+        <a href="{{ repo_uri }}" class="btn btn-sm btn-outline-secondary" target="_blank"
+           title="Get as Turtle (curl -H 'Accept: text/turtle' {{ repo_uri }})">
+          <i class="bi bi-file-earmark-code"></i> Turtle
+        </a>
+      </div>
+    </div>
+
+    <!-- FDP protocol info -->
+    <div class="alert alert-light border small mb-4">
+      <strong>Machine-readable metadata</strong> — all FDP resources support content negotiation.
+      Request <code>Accept: text/turtle</code> for Turtle output.
+      <br>
+      Repository URI: <code>{{ repo_uri }}</code>
+    </div>
+
+    <!-- Hierarchy card -->
+    <div class="card mb-3">
+      <div class="card-header fw-semibold"><i class="bi bi-diagram-3 text-primary"></i> Repository: Koetai FAIR SPARQL Platform</div>
+      <div class="card-body p-0">
+        {% if catalogs %}
+        <ul class="list-group list-group-flush">
+          {% for c in catalogs %}
+          <li class="list-group-item">
+            <div class="d-flex align-items-center justify-content-between">
+              <div>
+                <i class="bi bi-collection text-success"></i>
+                <a href="{{ url_for('fdp.catalog', orcid=c.orcid_id) }}" class="fw-semibold text-decoration-none">
+                  {{ c.name or c.orcid_id }}
+                </a>
+                <span class="text-muted small ms-2">Catalog · ORCID: {{ c.orcid_id }}</span>
+              </div>
+              <a href="{{ catalog_uri(c.orcid_id) }}" class="btn btn-sm btn-outline-secondary"
+                 title="Turtle">
+                <i class="bi bi-file-earmark-code"></i>
+              </a>
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-muted p-3 mb-0">No public datasets registered yet.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="text-muted small">
+      <hr>
+      This FAIR Data Point follows the
+      <a href="https://specs.fairdatapoint.org/" target="_blank">FDP specification</a>
+      using DCAT, DCT, r3d and fdp-o vocabularies.
+      It is automatically generated from the Koetai dataset registry.
+    </div>
+  </div>
+</div>
+{% endblock %}

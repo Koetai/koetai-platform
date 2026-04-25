@@ -36,7 +36,7 @@ def list_queries(owner_orcid, slug):
     ds = _get_dataset(owner_orcid, slug)
     if not ds:
         flash("Dataset not found.", "error")
-        return redirect(url_for("main.index"))
+        return redirect(url_for("index"))
     db = get_db()
     queries = db.execute(
         "SELECT * FROM sparqlist_queries WHERE dataset_id = ? ORDER BY label",

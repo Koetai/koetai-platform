@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{% from '_provenance.html' import badge_shexer, badge_rudof, badge_fuseki %}
+{% from '_ds_nav.html' import ds_nav with context %}
 {% block title %}Shapes — {{ ds.label }}{% endblock %}
 {% block head %}
 <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
@@ -12,24 +14,35 @@
   </ol>
 </nav>
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h3>Shape Inference &amp; Validation</h3>
-</div>
+{{ ds_nav(ds, 'shapes') }}
+
+<h3>Shape Inference &amp; Validation
+  <a href="{{ url_for('helppage') }}#shapes" class="text-muted ms-1" title="Shapes documentation" style="font-size:.75rem">
+    <i class="bi bi-question-circle"></i>
+  </a>
+</h3>
 
 {% if current_user.is_authenticated and current_user.id == ds.user_id %}
 <div class="card mb-4">
   <div class="card-body">
+    <div class="d-flex gap-2 mb-2">{{ badge_shexer() }} {{ badge_rudof() }} {{ badge_fuseki() }}</div>
     <h6>Infer shapes from uploaded data</h6>
     <div class="d-flex gap-2 flex-wrap">
       <button class="btn btn-outline-primary" onclick="infer('shexer')">
         <i class="bi bi-diagram-2"></i> ShExer → ShEx
       </button>
-      <button class="btn btn-outline-primary" onclick="infer('rudof_shex')">
-        <i class="bi bi-diagram-2"></i> RUDOF → ShEx
-      </button>
-      <button class="btn btn-outline-success" onclick="infer('rudof_shacl')">
-        <i class="bi bi-check2-square"></i> RUDOF → SHACL
-      </button>
+      <span data-bs-toggle="tooltip"
+            title="ShEx inference was removed from RUDOF v0.1.146+. Use ShExer instead.">
+        <button class="btn btn-outline-secondary" disabled style="pointer-events:none">
+          <i class="bi bi-diagram-2"></i> RUDOF → ShEx
+        </button>
+      </span>
+      <span data-bs-toggle="tooltip"
+            title="SHACL inference was removed from RUDOF v0.1.146+. Use ShExer instead.">
+        <button class="btn btn-outline-secondary" disabled style="pointer-events:none">
+          <i class="bi bi-check2-square"></i> RUDOF → SHACL
+        </button>
+      </span>
     </div>
     <div id="inferStatus" class="mt-3"></div>
   </div>
@@ -48,32 +61,160 @@
     </span>
     <div class="d-flex gap-2">
       {% if current_user.is_authenticated and current_user.id == ds.user_id %}
-      <button class="btn btn-sm btn-outline-warning" onclick="validate({{ sh.id }})">
+      {% if sh.format == 'shex' %}
+      <button class="btn btn-sm btn-outline-warning" onclick="validate({{ sh.id }}, 'rudof')" title="Validate with RUDOF">
+        <i class="bi bi-check-circle"></i> RUDOF
+      </button>
+      <button class="btn btn-sm btn-outline-info" onclick="validate({{ sh.id }}, 'jena')" title="Validate with Apache Jena">
+        <i class="bi bi-check-circle"></i> Jena
+      </button>
+      {% else %}
+      <button class="btn btn-sm btn-outline-warning" onclick="validate({{ sh.id }}, 'rudof')">
         <i class="bi bi-check-circle"></i> Validate
       </button>
       {% endif %}
+      <button class="btn btn-sm btn-outline-danger" onclick="deleteShape({{ sh.id }})" title="Delete shape">
+        <i class="bi bi-trash"></i>
+      </button>
+      {% endif %}
       <a href="{{ url_for('shapes.download', owner_orcid=ds.orcid_id, slug=ds.slug, shape_id=sh.id, fmt='shex' if sh.format == 'shex' else 'ttl') }}"
-         class="btn btn-sm btn-outline-secondary">
+         class="btn btn-sm btn-outline-secondary" title="Download ShEx/SHACL">
         <i class="bi bi-download"></i> .{{ 'shex' if sh.format == 'shex' else 'ttl' }}
       </a>
       {% if sh.mermaid %}
       <a href="{{ url_for('shapes.download', owner_orcid=ds.orcid_id, slug=ds.slug, shape_id=sh.id, fmt='mermaid') }}"
-         class="btn btn-sm btn-outline-secondary">
+         class="btn btn-sm btn-outline-secondary" title="Download Mermaid diagram">
         <i class="bi bi-download"></i> .mmd
       </a>
+      {% endif %}
+      {% if sh.rdfconfig_model %}
+      <div class="btn-group">
+        <button class="btn btn-sm btn-outline-success dropdown-toggle" data-bs-toggle="dropdown" title="rdf-config files">
+          <i class="bi bi-filetype-yml"></i> rdf-config
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+          <li>
+            <a class="dropdown-item" href="{{ url_for('shapes.download', owner_orcid=ds.orcid_id, slug=ds.slug, shape_id=sh.id, fmt='rdfconfig_model') }}">
+              <i class="bi bi-download me-2"></i>model.yaml
+            </a>
+          </li>
+          <li>
+            <a class="dropdown-item" href="{{ url_for('shapes.download', owner_orcid=ds.orcid_id, slug=ds.slug, shape_id=sh.id, fmt='rdfconfig_prefix') }}">
+              <i class="bi bi-download me-2"></i>prefix.yaml
+            </a>
+          </li>
+          {% if sh.rdfconfig_svg %}
+          <li>
+            <a class="dropdown-item" href="{{ url_for('shapes.download', owner_orcid=ds.orcid_id, slug=ds.slug, shape_id=sh.id, fmt='rdfconfig_svg') }}">
+              <i class="bi bi-download me-2"></i>schema.svg
+            </a>
+          </li>
+          {% endif %}
+          {% if sh.rdfconfig_sparql %}
+          <li>
+            <a class="dropdown-item" href="{{ url_for('shapes.download', owner_orcid=ds.orcid_id, slug=ds.slug, shape_id=sh.id, fmt='rdfconfig_sparql') }}">
+              <i class="bi bi-download me-2"></i>queries.rq
+            </a>
+          </li>
+          {% endif %}
+        </ul>
+      </div>
       {% endif %}
     </div>
   </div>
   <div class="card-body">
-    {% if sh.mermaid %}
-    <div class="mermaid mb-3">{{ sh.mermaid }}</div>
+    <!-- Tab nav: Mermaid / rdf-config SVG / ShEx stats -->
+    {% set has_rdfcfg = sh.rdfconfig_svg or sh.rdfconfig_model %}
+    {% if sh.mermaid or has_rdfcfg %}
+    <ul class="nav nav-tabs mb-3" id="diagramTabs-{{ sh.id }}">
+      {% if sh.mermaid %}
+      <li class="nav-item">
+        <button class="nav-link active" data-bs-toggle="tab"
+                data-bs-target="#tab-mermaid-{{ sh.id }}">
+          <i class="bi bi-diagram-2"></i> Mermaid
+        </button>
+      </li>
+      {% endif %}
+      {% if sh.rdfconfig_svg %}
+      <li class="nav-item">
+        <button class="nav-link {{ '' if sh.mermaid else 'active' }}" data-bs-toggle="tab"
+                data-bs-target="#tab-rdfcfg-{{ sh.id }}">
+          <i class="bi bi-image"></i> rdf-config schema
+        </button>
+      </li>
+      {% endif %}
+      {% if sh.rdfconfig_model %}
+      <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab"
+                data-bs-target="#tab-yaml-{{ sh.id }}">
+          <i class="bi bi-filetype-yml"></i> YAML
+        </button>
+      </li>
+      {% endif %}
+      {% if sh.format == 'shex' and sh.source == 'inferred' %}
+      <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab"
+                data-bs-target="#tab-stats-{{ sh.id }}">
+          <i class="bi bi-bar-chart-fill"></i> Coverage
+        </button>
+      </li>
+      {% endif %}
+    </ul>
+    <div class="tab-content">
+      {% if sh.mermaid %}
+      <div class="tab-pane fade show active" id="tab-mermaid-{{ sh.id }}">
+        <div class="mermaid">{{ sh.mermaid }}</div>
+      </div>
+      {% endif %}
+      {% if sh.rdfconfig_svg %}
+      <div class="tab-pane fade {{ '' if sh.mermaid else 'show active' }}" id="tab-rdfcfg-{{ sh.id }}">
+        <div class="border rounded p-2 bg-white overflow-auto" style="max-height:600px">
+          {{ sh.rdfconfig_svg | safe }}
+        </div>
+        <div class="mt-2">
+          <a href="{{ url_for('shapes.download', owner_orcid=ds.orcid_id, slug=ds.slug, shape_id=sh.id, fmt='rdfconfig_svg') }}"
+             class="btn btn-sm btn-outline-secondary" target="_blank">
+            <i class="bi bi-box-arrow-up-right"></i> Open SVG
+          </a>
+        </div>
+      </div>
+      {% endif %}
+      {% if sh.rdfconfig_model %}
+      <div class="tab-pane fade" id="tab-yaml-{{ sh.id }}">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <h6 class="text-muted small">model.yaml</h6>
+            <pre class="shex">{{ sh.rdfconfig_model }}</pre>
+          </div>
+          <div class="col-md-6">
+            <h6 class="text-muted small">prefix.yaml</h6>
+            <pre class="shex">{{ sh.rdfconfig_prefix or '' }}</pre>
+            {% if sh.rdfconfig_sparql %}
+            <h6 class="text-muted small mt-3">Generated SPARQL</h6>
+            <pre class="shex">{{ sh.rdfconfig_sparql }}</pre>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      {% endif %}
+      {% if sh.format == 'shex' and sh.source == 'inferred' %}
+      <div class="tab-pane fade" id="tab-stats-{{ sh.id }}">
+        <div id="stats-{{ sh.id }}"></div>
+      </div>
+      {% endif %}
+    </div>
+    {% elif sh.format == 'shex' and sh.source == 'inferred' %}
+    <div id="stats-{{ sh.id }}"></div>
     {% endif %}
-    <details>
+    <details class="mt-3">
       <summary class="text-muted small">Show raw schema</summary>
       <pre class="shex mt-2">{{ sh.content }}</pre>
     </details>
     <div id="validate-result-{{ sh.id }}" class="mt-2"></div>
   </div>
+  {% if sh.format == 'shex' and sh.source == 'inferred' %}
+  <script>renderShExStats({{ sh.id }}, {{ sh.content | tojson }});</script>
+  {% endif %}
 </div>
 {% endfor %}
 {% else %}
@@ -106,18 +247,94 @@ async function infer(tool) {
   }
 }
 
-async function validate(shapeId) {
+function renderShExStats(shapeId, shex) {
+  const el = document.getElementById('stats-' + shapeId);
+  if (!el) return;
+
+  // Parse ShEx: find shape blocks and extract property + percentage
+  const shapeRe = /([:\w<][^\n{]*?)\s*\n?\s*\{([^}]*)\}/gs;
+  const propRe  = /([^\s;#]+)\s+([^\s;#\[]+(?:\s*\[[^\]]*\])?)[^;#]*(?:;\s*)?(?:#\s*([\d.]+)\s*%)?/g;
+
+  const shapes = [];
+  let m;
+  while ((m = shapeRe.exec(shex)) !== null) {
+    const nameToken = m[1].trim();
+    if (/^PREFIX|^BASE/i.test(nameToken)) continue;
+    const name = nameToken.replace(/^.*[#/:]/, '').replace(/\W/g, '_') || nameToken;
+    const body = m[2];
+    const props = [];
+    let pm;
+    while ((pm = propRe.exec(body)) !== null) {
+      const prop = pm[1];
+      if (!prop || /rdf.type|rdf-syntax-ns#type/i.test(prop)) continue;
+      const pct = pm[3] ? parseFloat(pm[3]) : null;
+      const propName = prop.replace(/^.*[#/:]/, '') || prop;
+      if (propName && pct !== null) props.push({ name: propName, pct });
+    }
+    if (props.length) shapes.push({ name, props });
+  }
+
+  if (!shapes.length) return;
+
+  let html = '<h6 class="text-muted mb-2"><i class="bi bi-bar-chart-fill me-1"></i>Property coverage</h6>';
+  for (const shape of shapes) {
+    html += `<div class="mb-3">
+      <div class="fw-semibold mb-1 small">${shape.name}</div>`;
+    for (const p of shape.props) {
+      const pct   = Math.round(p.pct);
+      const color = pct >= 80 ? 'success' : pct >= 40 ? 'warning' : 'danger';
+      html += `<div class="d-flex align-items-center gap-2 mb-1">
+        <span class="text-muted" style="width:140px;font-size:.8rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${p.name}">${p.name}</span>
+        <div class="progress flex-grow-1" style="height:14px">
+          <div class="progress-bar bg-${color}" style="width:${pct}%" role="progressbar"
+               aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"></div>
+        </div>
+        <span style="width:36px;font-size:.8rem;text-align:right">${pct}%</span>
+      </div>`;
+    }
+    html += '</div>';
+  }
+  el.innerHTML = html;
+}
+
+async function deleteShape(shapeId) {
+  if (!confirm('Delete this shape?')) return;
+  try {
+    const r = await fetch(`/u/${OWNER}/${SLUG}/shapes/${shapeId}/delete`, {method:'POST'});
+    const d = await r.json();
+    if (d.success) {
+      const el = document.getElementById('shape-' + shapeId);
+      if (el) el.remove();
+    } else {
+      alert(d.error || 'Delete failed');
+    }
+  } catch(e) {
+    alert('Error: ' + e);
+  }
+}
+
+async function validate(shapeId, validator='rudof') {
   const el = document.getElementById('validate-result-' + shapeId);
-  el.innerHTML = '<div class="spinner-border spinner-border-sm"></div> Validating…';
+  const label = validator === 'jena' ? 'Jena' : 'RUDOF';
+  el.innerHTML = `<div class="spinner-border spinner-border-sm"></div> Validating with ${label}…`;
   try {
     const r = await fetch(`/u/${OWNER}/${SLUG}/shapes/validate`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({shape_id: shapeId})
+      body: JSON.stringify({shape_id: shapeId, validator})
     });
     const d = await r.json();
-    const cls = d.valid ? 'success' : 'warning';
-    el.innerHTML = `<div class="alert alert-${cls}"><strong>${d.valid ? 'Valid' : 'Violations found'}</strong><pre class="mt-2 mb-0" style="font-size:.75rem">${d.report}</pre></div>`;
+    const cls   = d.valid ? 'success' : 'danger';
+    const icon  = d.valid ? '✓' : '✗';
+    const label = d.valid ? 'Conforms' : 'Violations found';
+    el.innerHTML = `<div class="alert alert-${cls} mb-0">
+      <div class="d-flex align-items-center gap-2 mb-1">
+        <span class="fs-5 fw-bold">${icon}</span>
+        <strong>${label}</strong>
+        <span class="badge bg-secondary ms-auto">${d.validator}</span>
+      </div>
+      ${d.report ? `<pre class="mt-2 mb-0" style="font-size:.75rem;white-space:pre-wrap">${d.report}</pre>` : ''}
+    </div>`;
   } catch(e) {
     el.innerHTML = '<div class="alert alert-danger">Error: ' + e + '</div>';
   }

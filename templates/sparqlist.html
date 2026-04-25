@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% from '_provenance.html' import badge_sparqlist, badge_qlever, badge_fuseki %}
+{% from '_ds_nav.html' import ds_nav with context %}
+{% block title %}API — {{ ds.label }}{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">My Datasets</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('datasets.view', owner_orcid=ds.orcid_id, slug=ds.slug) }}">{{ ds.label }}</a></li>
+    <li class="breadcrumb-item active">REST API</li>
+  </ol>
+</nav>
+{{ ds_nav(ds, 'api') }}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4>SPARQLList REST API
+    <a href="{{ url_for('helppage') }}#api" class="text-muted ms-1" title="API documentation" style="font-size:.75rem">
+      <i class="bi bi-question-circle"></i>
+    </a>
+  </h4>
+  <div class="d-flex gap-2 align-items-center">
+    {{ badge_sparqlist() }}
+    {% if ds.platform == 'fuseki' %}{{ badge_fuseki() }}{% else %}{{ badge_qlever() }}{% endif %}
+  </div>
+  {% if current_user.is_authenticated and current_user.id == ds.user_id %}
+  <a href="{{ url_for('sparqlist.new_query', owner_orcid=ds.orcid_id, slug=ds.slug) }}" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-lg"></i> New API Query
+  </a>
+  {% endif %}
+</div>
+
+<p class="text-muted small">
+  Each query below is a parameterized SPARQL template exposed as a REST endpoint.
+  Use <code>?_format=simple</code> to get a flat JSON array instead of SPARQL results format.
+</p>
+
+{% if queries %}
+{% for q in queries %}
+<div class="card mb-3">
+  <div class="card-header d-flex justify-content-between">
+    <strong>{{ q.label }}</strong>
+    <code class="text-muted small">GET /u/{{ ds.orcid_id }}/{{ ds.slug }}/api/{{ q.slug }}</code>
+  </div>
+  <div class="card-body">
+    {% if q.description %}<p class="text-muted small">{{ q.description }}</p>{% endif %}
+
+    {% set params = q.params | from_json %}
+    {% if params %}
+    <h6 class="mt-2">Parameters</h6>
+    <form id="form-{{ q.slug }}" class="row g-2 mb-2" oninput="updateUrl('{{ q.slug }}')">
+      {% for p in params %}
+      <div class="col-auto">
+        <label class="form-label small">{{ p.label or p.name }}</label>
+        <input type="text" class="form-control form-control-sm" name="{{ p.name }}"
+               value="{{ p.default or '' }}" placeholder="{{ p.name }}">
+      </div>
+      {% endfor %}
+      <div class="col-auto align-self-end">
+        <button type="button" class="btn btn-sm btn-primary" onclick="callApi('{{ q.slug }}')">
+          <i class="bi bi-play-fill"></i> Call
+        </button>
+        <a href="{{ url_for('sparqlist.api_describe', owner_orcid=ds.orcid_id, slug=ds.slug, q_slug=q.slug) }}"
+           class="btn btn-sm btn-outline-secondary ms-1" target="_blank">
+          <i class="bi bi-file-code"></i> Schema
+        </a>
+      </div>
+    </form>
+    <div id="url-preview-{{ q.slug }}" class="d-flex align-items-center gap-2 mb-3">
+      <code class="small text-muted text-break flex-grow-1" id="url-text-{{ q.slug }}"></code>
+      <button type="button" class="btn btn-sm btn-outline-secondary flex-shrink-0"
+              onclick="copyUrl('{{ q.slug }}')" title="Copy URL">
+        <i class="bi bi-clipboard"></i>
+      </button>
+    </div>
+    {% else %}
+    <button type="button" class="btn btn-sm btn-primary mb-2" onclick="callApi('{{ q.slug }}')">
+      <i class="bi bi-play-fill"></i> Call
+    </button>
+    {% endif %}
+
+    <div id="api-result-{{ q.slug }}"></div>
+
+    <details class="mt-2">
+      <summary class="text-muted small">Show SPARQL template</summary>
+      <pre class="shex mt-1">{{ q.template }}</pre>
+    </details>
+  </div>
+</div>
+{% endfor %}
+{% else %}
+<p class="text-muted">No API queries yet.
+  {% if current_user.is_authenticated and current_user.id == ds.user_id %}
+  <a href="{{ url_for('sparqlist.new_query', owner_orcid=ds.orcid_id, slug=ds.slug) }}">Create the first one.</a>
+  {% endif %}
+</p>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const OWNER = '{{ ds.orcid_id }}';
+const SLUG  = '{{ ds.slug }}';
+
+function updateUrl(qSlug) {
+  const form = document.getElementById('form-' + qSlug);
+  const el   = document.getElementById('url-text-' + qSlug);
+  if (!form || !el) return;
+  const params = Object.fromEntries(new FormData(form));
+  const qs = new URLSearchParams({...params, _format:'simple'}).toString();
+  el.textContent = `${location.origin}/u/${OWNER}/${SLUG}/api/${qSlug}?${qs}`;
+}
+
+function copyUrl(qSlug) {
+  const el = document.getElementById('url-text-' + qSlug);
+  if (el) navigator.clipboard.writeText(el.textContent).catch(() => {});
+}
+
+// Init URL previews
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('[id^="form-"]').forEach(f => updateUrl(f.id.replace('form-', '')));
+});
+
+async function callApi(qSlug) {
+  const el     = document.getElementById('api-result-' + qSlug);
+  const form   = document.getElementById('form-' + qSlug);
+  const params = form ? Object.fromEntries(new FormData(form)) : {};
+  const qs     = new URLSearchParams({...params, _format:'simple'}).toString();
+  el.innerHTML = '<div class="spinner-border spinner-border-sm"></div>';
+  try {
+    const r = await fetch(`/u/${OWNER}/${SLUG}/api/${qSlug}?${qs}`);
+    const d = await r.json();
+    if (Array.isArray(d) && d.length) {
+      const cols = Object.keys(d[0]);
+      let html = '<table class="table table-sm table-bordered"><thead><tr>' +
+        cols.map(c=>`<th>${c}</th>`).join('') + '</tr></thead><tbody>';
+      for (const row of d.slice(0,50))
+        html += '<tr>' + cols.map(c=>`<td>${row[c] ?? ''}</td>`).join('') + '</tr>';
+      html += '</tbody></table>';
+      if (d.length > 50) html += `<small class="text-muted">Showing 50 of ${d.length}</small>`;
+      el.innerHTML = html;
+    } else {
+      el.innerHTML = '<pre class="shex">' + JSON.stringify(d, null, 2) + '</pre>';
+    }
+  } catch(e) {
+    el.innerHTML = '<div class="alert alert-danger">' + e + '</div>';
+  }
+}
+</script>
+{% endblock %}

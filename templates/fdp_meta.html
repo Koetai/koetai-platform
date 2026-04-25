@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% from '_ds_nav.html' import ds_nav with context %}
+{% block title %}FDP Metadata — {{ ds.label }}{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">My Datasets</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('datasets.view', owner_orcid=ds.orcid_id, slug=ds.slug) }}">{{ ds.label }}</a></li>
+    <li class="breadcrumb-item active">FDP Metadata</li>
+  </ol>
+</nav>
+
+{{ ds_nav(ds, 'fdp-meta') }}
+
+<div class="card" style="max-width:600px">
+  <div class="card-header"><i class="bi bi-award text-primary"></i> FAIR Data Point Metadata</div>
+  <div class="card-body">
+    <p class="text-muted small mb-3">
+      This metadata appears in the
+      {% if ds.is_public %}
+        <a href="{{ url_for('fdp.dataset', orcid=ds.orcid_id, slug=ds.slug) }}" target="_blank">FAIR Data Point</a>
+      {% else %}
+        FAIR Data Point (once the dataset is set to public)
+      {% endif %}
+      and is serialized as DCAT/FDP-O Turtle.
+    </p>
+
+    {% if not ds.fdp_keywords and not ds.fdp_theme %}
+    <div class="alert alert-warning small">
+      <i class="bi bi-exclamation-triangle"></i>
+      <strong>Incomplete metadata.</strong> Adding keywords and a theme URI improves discoverability
+      in FAIR catalogues and search engines.
+    </div>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('datasets.update_fdp_meta', owner_orcid=ds.orcid_id, slug=ds.slug) }}">
+      <div class="mb-3">
+        <label class="form-label">License URI</label>
+        <input type="url" name="fdp_license" class="form-control"
+               value="{{ ds.fdp_license or 'https://creativecommons.org/licenses/by/4.0/' }}">
+        <div class="form-text">e.g. <code>https://creativecommons.org/licenses/by/4.0/</code></div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Version</label>
+        <input type="text" name="fdp_version" class="form-control"
+               value="{{ ds.fdp_version or '1.0' }}" placeholder="1.0">
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Keywords</label>
+        <input type="text" name="fdp_keywords" class="form-control"
+               value="{{ ds.fdp_keywords or '' }}" placeholder="rare disease, ontology, ORDO">
+        <div class="form-text">Comma-separated keywords.</div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Theme / Vocabulary URI</label>
+        <input type="url" name="fdp_theme" class="form-control"
+               value="{{ ds.fdp_theme or '' }}" placeholder="http://www.orpha.net/ORDO/">
+        <div class="form-text">Optional: the ontology or vocabulary this dataset belongs to.</div>
+      </div>
+      <button type="submit" class="btn btn-primary">Save FDP Metadata</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

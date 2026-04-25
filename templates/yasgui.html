@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+{% from '_provenance.html' import badge_qlever, badge_fuseki %}
+{% from '_ds_nav.html' import ds_nav with context %}
+{% block title %}SPARQL — {{ ds.label }}{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/monokai.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.css">
+<style>
+  .CodeMirror {
+    height: 280px;
+    font-size: 13px;
+    font-family: 'JetBrains Mono', 'Fira Mono', monospace;
+    border: 1px solid #dee2e6;
+    border-radius: .375rem;
+  }
+  #results-wrap { margin-top: 1rem; }
+  #results-table { font-size: .85rem; }
+  #results-table td { max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #results-table td:hover { white-space: normal; word-break: break-all; }
+</style>
+{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">My Datasets</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('datasets.view', owner_orcid=ds.orcid_id, slug=ds.slug) }}">{{ ds.label }}</a></li>
+    <li class="breadcrumb-item active">SPARQL</li>
+  </ol>
+</nav>
+{{ ds_nav(ds, 'sparql') }}
+
+<div class="d-flex justify-content-between align-items-center mb-2">
+  <h4 class="mb-0">SPARQL — {{ ds.label }}</h4>
+  <div class="d-flex gap-2 align-items-center">
+    {% if ds.platform == 'fuseki' %}{{ badge_fuseki() }}{% else %}{{ badge_qlever() }}{% endif %}
+    <small class="text-muted d-none d-md-block">
+      <code>{{ request.host_url }}u/{{ ds.orcid_id }}/{{ ds.slug }}/sparql</code>
+    </small>
+  </div>
+</div>
+
+<textarea id="query">{% if preload_query %}{{ preload_query }}{% else %}SELECT ?s ?p ?o
+WHERE {
+  GRAPH <{{ ds.graph_base }}/data> {
+    ?s ?p ?o
+  }
+}
+LIMIT 25{% endif %}</textarea>
+
+<div class="mt-2 d-flex gap-2 align-items-center flex-wrap">
+  <button class="btn btn-primary" id="runBtn">
+    <i class="bi bi-play-fill"></i> Run
+  </button>
+  <button class="btn btn-outline-secondary btn-sm" id="clearBtn">Clear</button>
+  <button class="btn btn-outline-secondary btn-sm" id="resetBtn">Reset</button>
+  <span class="text-muted small ms-auto" id="queryInfo"></span>
+</div>
+
+<div id="results-wrap"></div>
+
+<div class="mt-4">
+  <div class="d-flex align-items-center gap-2 mb-2">
+    <h6 class="mb-0">Saved Examples</h6>
+    <a href="{{ url_for('examples.list_examples', owner_orcid=ds.orcid_id, slug=ds.slug) }}"
+       class="btn btn-sm btn-outline-secondary ms-auto">
+      <i class="bi bi-pencil-square"></i> Manage
+    </a>
+  </div>
+  <div id="exampleList"><div class="spinner-border spinner-border-sm text-muted"></div></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sparql/sparql.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.js"></script>
+<script src="{{ url_for('static', filename='sparql-hint.js') }}"></script>
+<script>
+const ENDPOINT    = '/u/{{ ds.orcid_id }}/{{ ds.slug }}/sparql';
+const DEFAULT_Q   = document.getElementById('query').value;
+
+const editor = CodeMirror.fromTextArea(document.getElementById('query'), {
+  mode:         'application/sparql-query',
+  theme:        'monokai',
+  lineNumbers:  true,
+  matchBrackets: true,
+  lineWrapping: true,
+  autofocus:    true,
+  extraKeys:    {
+    'Ctrl-Enter': runQuery,
+    'Cmd-Enter':  runQuery,
+    'Ctrl-Space': cm => cm.showHint({ hint: sparqlHint, completeSingle: false }),
+  },
+});
+
+editor.on('keyup', (cm, event) => {
+  if (cm.state.completionActive) return;
+  const key = event.key;
+  if (key === 'Escape' || key === 'Enter' || key === 'Tab') return;
+  if (key === ':' || key === '.' || (key.length === 1 && /[A-Za-z_]/.test(key))) {
+    cm.showHint({ hint: sparqlHint, completeSingle: false });
+  }
+});
+
+document.getElementById('runBtn').addEventListener('click', runQuery);
+document.getElementById('clearBtn').addEventListener('click', () => editor.setValue(''));
+document.getElementById('resetBtn').addEventListener('click', () => editor.setValue(DEFAULT_Q));
+
+async function runQuery() {
+  const btn   = document.getElementById('runBtn');
+  const info  = document.getElementById('queryInfo');
+  const wrap  = document.getElementById('results-wrap');
+  const query = editor.getValue();
+  if (!query.trim()) return;
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Running…';
+  info.textContent = '';
+  wrap.innerHTML   = '';
+  const t0 = Date.now();
+
+  try {
+    const r = await fetch(ENDPOINT, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded',
+                 'Accept': 'application/sparql-results+json' },
+      body: 'query=' + encodeURIComponent(query),
+    });
+    const text = await r.text();
+    const elapsed = Date.now() - t0;
+
+    if (!r.ok) {
+      wrap.innerHTML = `<div class="alert alert-danger mt-2"><pre class="mb-0">${escHtml(text)}</pre></div>`;
+      info.textContent = `Error ${r.status} in ${elapsed} ms`;
+    } else {
+      renderResults(text, wrap, elapsed, info);
+    }
+  } catch(e) {
+    wrap.innerHTML = `<div class="alert alert-danger mt-2">${escHtml(String(e))}</div>`;
+    info.textContent = 'Network error';
+  }
+  btn.disabled = false;
+  btn.innerHTML = '<i class="bi bi-play-fill"></i> Run';
+}
+
+function renderResults(text, wrap, elapsed, info) {
+  let data;
+  try { data = JSON.parse(text); } catch {
+    wrap.innerHTML = `<pre class="mt-2">${escHtml(text)}</pre>`;
+    info.textContent = `Done in ${elapsed} ms`;
+    return;
+  }
+
+  // ASK query
+  if ('boolean' in data) {
+    const cls = data.boolean ? 'success' : 'warning';
+    wrap.innerHTML = `<div class="alert alert-${cls} mt-2 fw-bold">Result: ${data.boolean}</div>`;
+    info.textContent = `Done in ${elapsed} ms`;
+    return;
+  }
+
+  const bindings = data?.results?.bindings ?? [];
+  const vars     = data?.head?.vars ?? [];
+
+  if (!bindings.length) {
+    wrap.innerHTML = '<div class="alert alert-secondary mt-2">No results.</div>';
+    info.textContent = `0 results in ${elapsed} ms`;
+    return;
+  }
+
+  let html = `<div class="table-responsive mt-2">
+    <table class="table table-sm table-hover table-bordered" id="results-table">
+    <thead class="table-dark"><tr>${vars.map(v => `<th>${escHtml(v)}</th>`).join('')}</tr></thead>
+    <tbody>`;
+
+  for (const row of bindings) {
+    html += '<tr>' + vars.map(v => {
+      const cell = row[v];
+      if (!cell) return '<td class="text-muted">—</td>';
+      const val  = escHtml(cell.value);
+      const type = cell.type;
+      if (type === 'uri') {
+        return `<td><a href="${val}" target="_blank" rel="noopener" class="text-break">${val}</a></td>`;
+      }
+      const lang = cell['xml:lang'] ? `<span class="badge bg-light text-dark ms-1">@${cell['xml:lang']}</span>` : '';
+      return `<td>${val}${lang}</td>`;
+    }).join('') + '</tr>';
+  }
+
+  html += '</tbody></table></div>';
+
+  // Download CSV button
+  html += `<div class="d-flex gap-2 mt-1">
+    <button class="btn btn-sm btn-outline-secondary" onclick="downloadCSV()">
+      <i class="bi bi-download"></i> CSV
+    </button>
+    <small class="text-muted align-self-center">${bindings.length} results</small>
+  </div>`;
+
+  wrap.innerHTML = html;
+  info.textContent = `${bindings.length} results in ${elapsed} ms`;
+
+  // Store for CSV export
+  window._lastResults = { vars, bindings };
+}
+
+function downloadCSV() {
+  if (!window._lastResults) return;
+  const { vars, bindings } = window._lastResults;
+  const rows = [vars.join(',')];
+  for (const row of bindings) {
+    rows.push(vars.map(v => JSON.stringify(row[v]?.value ?? '')).join(','));
+  }
+  const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+  const a = Object.assign(document.createElement('a'),
+    { href: URL.createObjectURL(blob), download: 'results.csv' });
+  a.click();
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Load examples
+(async () => {
+  const el = document.getElementById('exampleList');
+  try {
+    const r = await fetch(`/u/{{ ds.orcid_id }}/{{ ds.slug }}/examples/list`);
+    const examples = await r.json();
+    if (!examples.length) {
+      el.innerHTML = '<span class="text-muted small">No examples yet. <a href="{{ url_for("examples.list_examples", owner_orcid=ds.orcid_id, slug=ds.slug) }}">Add one.</a></span>';
+      return;
+    }
+    let html = '<div class="list-group list-group-flush">';
+    for (const ex of examples) {
+      const kw = (ex.keywords || '').split(',').filter(Boolean)
+        .map(k => `<span class="badge bg-light text-dark border ms-1">${k.trim()}</span>`).join('');
+      html += `<div class="list-group-item list-group-item-action px-0 py-2 d-flex justify-content-between align-items-start">
+        <div>
+          <span class="fw-semibold small">${escHtml(ex.label)}</span>${kw}
+          ${ex.description ? `<div class="text-muted" style="font-size:.8rem">${escHtml(ex.description)}</div>` : ''}
+        </div>
+        <button class="btn btn-sm btn-outline-primary ms-2 text-nowrap"
+                onclick="editor.setValue(${JSON.stringify(ex.query)}); window.scrollTo({top:0,behavior:'smooth'})">
+          <i class="bi bi-arrow-up-circle"></i> Load
+        </button>
+      </div>`;
+    }
+    html += '</div>';
+    el.innerHTML = html;
+  } catch { el.innerHTML = '<span class="text-muted small">Could not load examples.</span>'; }
+})();
+</script>
+{% endblock %}

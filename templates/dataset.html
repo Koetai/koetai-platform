@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{% from '_provenance.html' import badge_qlever, badge_fuseki %}
+{% from '_ds_nav.html' import ds_nav with context %}
 {% block title %}{{ ds.label }}{% endblock %}
 {% block content %}
 <nav aria-label="breadcrumb">
@@ -10,92 +12,79 @@
 
 <div class="row">
   <div class="col-md-8">
-    <h2>{{ ds.label }}</h2>
-    {% if ds.description %}<p class="text-muted">{{ ds.description }}</p>{% endif %}
-    <p class="small text-muted"><i class="bi bi-link-45deg"></i> Named graph: <code>{{ ds.graph_base }}/data</code></p>
-    <p>
-      <span class="badge bg-{{ 'success' if triple_count >= 0 else 'secondary' }}">
-        {% if triple_count >= 0 %}{{ "{:,}".format(triple_count) }} triples{% else %}not indexed{% endif %}
+    <h2 class="mb-1">{{ ds.label }}</h2>
+    {% if ds.description %}<p class="text-muted mb-1">{{ ds.description }}</p>{% endif %}
+    <div class="d-flex flex-wrap gap-2 align-items-center mt-2">
+      <span class="badge bg-{{ 'success' if triple_count > 0 else ('warning text-dark' if triple_count == 0 else 'secondary') }}">
+        {% if triple_count > 0 %}{{ "{:,}".format(triple_count) }} triples
+        {% elif triple_count == 0 %}empty — no data loaded yet
+        {% else %}not indexed{% endif %}
       </span>
       {% if not ds.is_public %}<span class="badge bg-secondary">private</span>{% endif %}
-    </p>
+      {% if ds.platform == 'fuseki' %}{{ badge_fuseki() }}{% else %}{{ badge_qlever() }}{% endif %}
+    </div>
+    <p class="small text-muted mt-2 mb-0"><i class="bi bi-link-45deg"></i> <code>{{ ds.graph_base }}/data</code></p>
   </div>
   {% if current_user.is_authenticated and current_user.id == ds.user_id %}
-  <div class="col-md-4 text-md-end">
+  <div class="col-md-4 text-md-end mt-2">
     <form method="post" action="{{ url_for('datasets.delete', owner_orcid=ds.orcid_id, slug=ds.slug) }}"
           onsubmit="return confirm('Delete this dataset and all its data?')">
-      <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i> Delete</button>
+      <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i> Delete dataset</button>
     </form>
   </div>
   {% endif %}
 </div>
 
-<ul class="nav nav-tabs mt-3" id="dsTabs">
-  <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-upload">Upload</a></li>
-  <li class="nav-item"><a class="nav-link" href="{{ url_for('datasets.sparql_endpoint', owner_orcid=ds.orcid_id, slug=ds.slug) }}">SPARQL</a></li>
-  <li class="nav-item"><a class="nav-link" href="{{ url_for('examples.list_examples', owner_orcid=ds.orcid_id, slug=ds.slug) }}">Examples</a></li>
-  <li class="nav-item"><a class="nav-link" href="{{ url_for('shapes.view', owner_orcid=ds.orcid_id, slug=ds.slug) }}">Shapes</a></li>
-  <li class="nav-item"><a class="nav-link" href="{{ url_for('sparqlist.list_queries', owner_orcid=ds.orcid_id, slug=ds.slug) }}">API</a></li>
-</ul>
+{{ ds_nav(ds, 'overview') }}
 
-<div class="tab-content mt-3">
-  <div class="tab-pane fade show active" id="tab-upload">
-    {% if current_user.is_authenticated and current_user.id == ds.user_id %}
-    <div class="card">
-      <div class="card-body">
-        <h6>Upload RDF Data</h6>
-        <p class="text-muted small">Supported: .ttl, .nt, .n3, .rdf, .owl, .trig, .nq, .jsonld (max 500 MB)</p>
-        <form id="uploadForm">
-          <div class="mb-3">
-            <input type="file" class="form-control" id="rdfFile" accept=".ttl,.nt,.n3,.rdf,.owl,.trig,.nq,.jsonld" required>
-          </div>
-          <button type="submit" class="btn btn-primary" id="uploadBtn">
-            <i class="bi bi-upload"></i> Upload &amp; Index
-          </button>
-        </form>
-        <div id="uploadStatus" class="mt-3"></div>
-      </div>
-    </div>
-    {% else %}
-    <p class="text-muted">Only the dataset owner can upload data.</p>
-    {% endif %}
+<!-- Quick-start nudge when dataset is empty -->
+{% if triple_count == 0 and current_user.is_authenticated and current_user.id == ds.user_id %}
+<div class="alert alert-info d-flex gap-3 align-items-start">
+  <i class="bi bi-lightbulb fs-4"></i>
+  <div>
+    <strong>This dataset has no data yet.</strong>
+    Load RDF data via
+    <a href="{{ url_for('datasets.upload_page', owner_orcid=ds.orcid_id, slug=ds.slug) }}">file upload</a>,
+    <a href="{{ url_for('github.view', owner_orcid=ds.orcid_id, slug=ds.slug) }}">a GitHub/GitLab repository</a>, or
+    <a href="{{ url_for('web_sources.view', owner_orcid=ds.orcid_id, slug=ds.slug) }}">a web download page</a>.
   </div>
 </div>
-{% endblock %}
-
-{% block scripts %}
-{% if current_user.is_authenticated and current_user.id == ds.user_id %}
-<script>
-document.getElementById('uploadForm').addEventListener('submit', async e => {
-  e.preventDefault();
-  const btn    = document.getElementById('uploadBtn');
-  const status = document.getElementById('uploadStatus');
-  const file   = document.getElementById('rdfFile').files[0];
-  if (!file) return;
-
-  const fd = new FormData();
-  fd.append('rdf_file', file);
-
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Uploading...';
-  status.innerHTML = '';
-
-  try {
-    const r = await fetch('{{ url_for("datasets.upload", owner_orcid=ds.orcid_id, slug=ds.slug) }}',
-      { method: 'POST', body: fd });
-    const d = await r.json();
-    if (d.success) {
-      status.innerHTML = '<div class="alert alert-success">Uploaded and indexed into <code>' + d.graph + '</code></div>';
-      setTimeout(() => location.reload(), 1500);
-    } else {
-      status.innerHTML = '<div class="alert alert-danger">' + (d.error || 'Upload failed') + '</div>';
-    }
-  } catch(err) {
-    status.innerHTML = '<div class="alert alert-danger">Upload error: ' + err + '</div>';
-  }
-  btn.disabled = false;
-  btn.innerHTML = '<i class="bi bi-upload"></i> Upload &amp; Index';
-});
-</script>
 {% endif %}
+
+<!-- Summary cards -->
+<div class="row g-3 mt-1">
+  <div class="col-md-4">
+    <div class="card h-100 border-0 shadow-sm">
+      <div class="card-body">
+        <div class="text-muted small mb-1"><i class="bi bi-braces"></i> SPARQL Endpoint</div>
+        <div class="text-break small"><code>{{ url_for('datasets.sparql_endpoint', owner_orcid=ds.orcid_id, slug=ds.slug, _external=True) }}</code></div>
+        <a href="{{ url_for('datasets.sparql_endpoint', owner_orcid=ds.orcid_id, slug=ds.slug) }}" class="btn btn-sm btn-outline-primary mt-2">Open editor</a>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card h-100 border-0 shadow-sm">
+      <div class="card-body">
+        <div class="text-muted small mb-1"><i class="bi bi-diagram-2"></i> Shapes</div>
+        <div class="small text-muted">{{ shape_count }} schema(s) inferred</div>
+        <a href="{{ url_for('shapes.view', owner_orcid=ds.orcid_id, slug=ds.slug) }}" class="btn btn-sm btn-outline-secondary mt-2">View shapes</a>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card h-100 border-0 shadow-sm">
+      <div class="card-body">
+        <div class="text-muted small mb-1"><i class="bi bi-cloud-download"></i> Data sources</div>
+        <div class="small text-muted">
+          {{ source_counts.git }} git repo{{ 's' if source_counts.git != 1 else '' }},
+          {{ source_counts.web }} web source{{ 's' if source_counts.web != 1 else '' }}
+        </div>
+        <div class="d-flex gap-1 mt-2">
+          <a href="{{ url_for('github.view', owner_orcid=ds.orcid_id, slug=ds.slug) }}" class="btn btn-sm btn-outline-secondary">Git</a>
+          <a href="{{ url_for('web_sources.view', owner_orcid=ds.orcid_id, slug=ds.slug) }}" class="btn btn-sm btn-outline-secondary">Web</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}

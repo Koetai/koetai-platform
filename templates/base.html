@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Koetai{% endblock %} — FAIR SPARQL Platform</title>
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <link rel="icon" type="image/png" sizes="48x48" href="{{ url_for('static', filename='favicon-48.png') }}">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <style>
@@ -24,8 +26,11 @@
 <body>
 <nav class="navbar navbar-expand-lg navbar-dark">
   <div class="container">
-    <a class="navbar-brand" href="{{ url_for('index') }}">
-      <i class="bi bi-diagram-3"></i> Koetai
+    <a class="navbar-brand d-flex align-items-center gap-2" href="{{ url_for('index') }}">
+      <img src="{{ url_for('static', filename='anableps.jpg') }}"
+           alt="Koetai" height="30"
+           style="filter:invert(1); mix-blend-mode:screen; opacity:.9">
+      <span>Koetai</span>
     </a>
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
       <span class="navbar-toggler-icon"></span>
@@ -33,11 +38,32 @@
     <div class="collapse navbar-collapse" id="nav">
       <ul class="navbar-nav me-auto">
         <li class="nav-item"><a class="nav-link" href="{{ url_for('index') }}">Home</a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('endpoints') }}"><i class="bi bi-diagram-3"></i> Endpoints</a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('sparql_editor') }}"><i class="bi bi-braces-asterisk"></i> SPARQL</a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('fdp.repository') }}"><i class="bi bi-award"></i> FAIR Data Point</a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('helppage') }}"><i class="bi bi-book"></i> Help</a></li>
         {% if current_user.is_authenticated %}
         <li class="nav-item"><a class="nav-link" href="{{ url_for('dashboard.index') }}">My Datasets</a></li>
         {% if current_user.is_admin %}
-        <li class="nav-item"><a class="nav-link" href="{{ url_for('dashboard.invites') }}">Invites</a></li>
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+            <i class="bi bi-shield-lock"></i> Admin
+          </a>
+          <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="{{ url_for('dashboard.invites') }}"><i class="bi bi-envelope-plus me-2"></i>Invites</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('dashboard.admin_storage') }}"><i class="bi bi-hdd-stack me-2"></i>Storage per user</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="{{ url_for('dashboard.costs') }}"><i class="bi bi-currency-euro me-2"></i>Cost overview</a></li>
+          </ul>
+        </li>
         {% endif %}
+        <li class="nav-item">
+          <a class="nav-link {% if current_user.is_authenticated and current_user.is_admin %}{% endif %}"
+             href="{% if current_user.is_authenticated and current_user.is_admin %}{{ url_for('dashboard.costs') }}{% else %}#{% endif %}">
+            <i class="bi bi-currency-euro"></i>
+            {% if monthly_cost_eur %}€{{ "%.0f"|format(monthly_cost_eur) }}/mo{% else %}Costs{% endif %}
+          </a>
+        </li>
         {% endif %}
       </ul>
       <ul class="navbar-nav">
@@ -75,9 +101,51 @@
   {% block content %}{% endblock %}
 </div>
 
+<footer class="mt-5 py-4 border-top bg-dark text-white">
+  <div class="container">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-4">
+      <div class="text-muted small">
+        <strong class="text-white">Koetai</strong> — FAIR SPARQL Platform<br>
+        <span style="font-size:.75rem">Powered by open-source components</span>
+      </div>
+      <div class="d-flex align-items-center gap-4 flex-wrap">
+        <a href="https://qlever.cs.uni-freiburg.de/" target="_blank" rel="noopener"
+           title="QLever SPARQL engine">
+          <img src="{{ url_for('static', filename='logos/qlever.png') }}"
+               alt="QLever" style="height:32px;filter:brightness(0) invert(1);opacity:.85">
+        </a>
+        <a href="https://jena.apache.org/documentation/fuseki2/" target="_blank" rel="noopener"
+           title="Apache Jena Fuseki">
+          <img src="{{ url_for('static', filename='logos/jena.svg') }}"
+               alt="Apache Jena" style="height:36px;filter:brightness(0) invert(1);opacity:.85">
+        </a>
+        <a href="https://dbcls.rois.ac.jp/" target="_blank" rel="noopener"
+           title="Database Center for Life Science">
+          <img src="https://dbcls.rois.ac.jp/img/logo_dbcls_white.svg"
+               alt="DBCLS" style="height:32px;opacity:.85">
+        </a>
+      </div>
+    </div>
+  </div>
+</footer>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
-<script>mermaid.initialize({startOnLoad:true, theme:'neutral'});</script>
+<script>
+mermaid.initialize({startOnLoad:true, theme:'neutral'});
+// Bootstrap tooltips
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
+    new bootstrap.Tooltip(el);
+  });
+  // Highlight active navbar link
+  const here = location.pathname;
+  document.querySelectorAll('.navbar .nav-link').forEach(a => {
+    const href = a.getAttribute('href');
+    if (href && href !== '/' && here.startsWith(href)) a.classList.add('fw-bold');
+  });
+});
+</script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

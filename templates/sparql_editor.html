@@ -1,0 +1,287 @@
+{% extends "base.html" %}
+{% block title %}SPARQL Editor{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/monokai.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.css">
+<style>
+  .CodeMirror {
+    height: 280px;
+    font-size: 13px;
+    font-family: 'JetBrains Mono', 'Fira Mono', monospace;
+    border: 1px solid #dee2e6;
+    border-radius: .375rem;
+  }
+  #results-wrap { margin-top: 1rem; }
+  #results-table td { max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #results-table td:hover { white-space: normal; word-break: break-all; }
+</style>
+{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h2 class="mb-0"><i class="bi bi-braces-asterisk"></i> SPARQL Editor</h2>
+    <p class="text-muted small mb-0">Query any public Koetai dataset</p>
+  </div>
+  <a href="{{ url_for('endpoints') }}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-diagram-3"></i> All endpoints
+  </a>
+</div>
+
+<!-- Endpoint selector -->
+<div class="card mb-3 border-0 shadow-sm">
+  <div class="card-body py-3">
+    {% if datasets %}
+    <div class="row g-2 align-items-end">
+      <div class="col-auto">
+        <label class="form-label small fw-semibold mb-1">Owner</label>
+        <select id="ownerSelect" class="form-select form-select-sm">
+          <option value="">— all owners —</option>
+          {% set seen = [] %}
+          {% for ds in datasets %}
+            {% if ds.orcid_id not in seen %}
+              {% if seen.append(ds.orcid_id) %}{% endif %}
+              <option value="{{ ds.orcid_id }}">{{ ds.owner_name or ds.orcid_id }}</option>
+            {% endif %}
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <label class="form-label small fw-semibold mb-1">Dataset</label>
+        <select id="datasetSelect" class="form-select form-select-sm" style="min-width:260px">
+          {% for ds in datasets %}
+          <option value="{{ ds.orcid_id }}/{{ ds.slug }}"
+                  data-owner="{{ ds.orcid_id }}"
+                  data-graph="{{ ds.graph_base }}/data"
+                  data-endpoint="{{ url_for('datasets.sparql_endpoint', owner_orcid=ds.orcid_id, slug=ds.slug, _external=True) }}">
+            {{ ds.owner_name or ds.orcid_id }} / {{ ds.label }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <label class="form-label small fw-semibold mb-1">Examples</label>
+        <select id="exampleSelect" class="form-select form-select-sm" style="min-width:200px">
+          <option value="">— load an example —</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <label class="form-label small d-block mb-1">&nbsp;</label>
+        <button class="btn btn-sm btn-outline-secondary" id="copyEndpointBtn" title="Copy endpoint URL">
+          <i class="bi bi-clipboard"></i>
+        </button>
+      </div>
+    </div>
+    <div class="mt-2">
+      <small class="text-muted">Endpoint: <code id="endpointDisplay"></code></small>
+    </div>
+    {% else %}
+    <p class="text-muted mb-0">No public datasets available yet.</p>
+    {% endif %}
+  </div>
+</div>
+
+<textarea id="query">SELECT ?s ?p ?o
+WHERE {
+  ?s ?p ?o
+}
+LIMIT 25</textarea>
+
+<div class="mt-2 d-flex gap-2 align-items-center flex-wrap">
+  <button class="btn btn-primary" id="runBtn"><i class="bi bi-play-fill"></i> Run</button>
+  <button class="btn btn-outline-secondary btn-sm" id="clearBtn">Clear</button>
+  <span class="text-muted small ms-auto" id="queryInfo"></span>
+</div>
+
+<div id="results-wrap"></div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sparql/sparql.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.js"></script>
+<script src="{{ url_for('static', filename='sparql-hint.js') }}"></script>
+<script>
+const DATASETS = {{ datasets | tojson }};
+
+const editor = CodeMirror.fromTextArea(document.getElementById('query'), {
+  mode:         'application/sparql-query',
+  theme:        'monokai',
+  lineNumbers:  true,
+  matchBrackets: true,
+  lineWrapping: true,
+  autofocus:    true,
+  extraKeys:    {
+    'Ctrl-Enter': runQuery,
+    'Cmd-Enter':  runQuery,
+    'Ctrl-Space': cm => cm.showHint({ hint: sparqlHint, completeSingle: false }),
+  },
+});
+
+editor.on('keyup', (cm, event) => {
+  if (cm.state.completionActive) return;
+  const key = event.key;
+  if (key === 'Escape' || key === 'Enter' || key === 'Tab') return;
+  if (key === ':' || key === '.' || (key.length === 1 && /[A-Za-z_]/.test(key))) {
+    cm.showHint({ hint: sparqlHint, completeSingle: false });
+  }
+});
+
+document.getElementById('runBtn').addEventListener('click', runQuery);
+document.getElementById('clearBtn').addEventListener('click', () => editor.setValue(''));
+
+let currentEndpoint = '';
+let currentGraph    = '';
+
+function getSelectedOption() {
+  const sel = document.getElementById('datasetSelect');
+  return sel.options[sel.selectedIndex];
+}
+
+function applyDataset(opt) {
+  if (!opt || !opt.dataset) return;
+  currentEndpoint = opt.dataset.endpoint;
+  currentGraph    = opt.dataset.graph;
+  document.getElementById('endpointDisplay').textContent = currentEndpoint;
+
+  const q = editor.getValue();
+  if (!q.trim() || q.includes('?s ?p ?o')) {
+    editor.setValue(
+      `SELECT ?s ?p ?o\nWHERE {\n  GRAPH <${currentGraph}> {\n    ?s ?p ?o\n  }\n}\nLIMIT 25`
+    );
+  }
+  loadExamples(opt.value);
+}
+
+document.getElementById('ownerSelect').addEventListener('change', function() {
+  const ownerFilter = this.value;
+  const dsSel = document.getElementById('datasetSelect');
+  let first = null;
+  for (const opt of dsSel.options) {
+    const show = !ownerFilter || opt.dataset.owner === ownerFilter;
+    opt.style.display = show ? '' : 'none';
+    if (show && !first) first = opt;
+  }
+  if (first) { dsSel.value = first.value; applyDataset(first); }
+});
+
+document.getElementById('datasetSelect').addEventListener('change', function() {
+  applyDataset(getSelectedOption());
+});
+
+document.getElementById('exampleSelect').addEventListener('change', function() {
+  if (this.value) { editor.setValue(this.value); this.value = ''; }
+});
+
+document.getElementById('copyEndpointBtn').addEventListener('click', () => {
+  if (currentEndpoint) navigator.clipboard.writeText(currentEndpoint).catch(() => {});
+});
+
+async function loadExamples(ownerSlug) {
+  const [orcid, slug] = ownerSlug.split('/');
+  const exSel = document.getElementById('exampleSelect');
+  exSel.innerHTML = '<option value="">— load an example —</option>';
+  try {
+    const examples = await fetch(`/u/${orcid}/${slug}/examples/list`).then(r => r.json());
+    for (const ex of examples) {
+      const opt = document.createElement('option');
+      opt.value = ex.query;
+      opt.textContent = ex.label;
+      exSel.appendChild(opt);
+    }
+  } catch {}
+}
+
+async function runQuery() {
+  if (!currentEndpoint) return;
+  const btn  = document.getElementById('runBtn');
+  const info = document.getElementById('queryInfo');
+  const wrap = document.getElementById('results-wrap');
+  const query = editor.getValue();
+  if (!query.trim()) return;
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Running…';
+  info.textContent = '';
+  wrap.innerHTML   = '';
+  const t0 = Date.now();
+
+  try {
+    const r = await fetch(currentEndpoint, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded',
+                 'Accept': 'application/sparql-results+json' },
+      body: 'query=' + encodeURIComponent(query),
+    });
+    const text = await r.text();
+    const elapsed = Date.now() - t0;
+    if (!r.ok) {
+      wrap.innerHTML = `<div class="alert alert-danger mt-2"><pre class="mb-0">${esc(text)}</pre></div>`;
+      info.textContent = `Error ${r.status} in ${elapsed} ms`;
+    } else {
+      renderResults(text, wrap, elapsed, info);
+    }
+  } catch(e) {
+    wrap.innerHTML = `<div class="alert alert-danger mt-2">${esc(String(e))}</div>`;
+  }
+  btn.disabled = false;
+  btn.innerHTML = '<i class="bi bi-play-fill"></i> Run';
+}
+
+function renderResults(text, wrap, elapsed, info) {
+  let data;
+  try { data = JSON.parse(text); } catch {
+    wrap.innerHTML = `<pre class="mt-2">${esc(text)}</pre>`;
+    info.textContent = `Done in ${elapsed} ms`;
+    return;
+  }
+  if ('boolean' in data) {
+    wrap.innerHTML = `<div class="alert alert-${data.boolean?'success':'warning'} mt-2 fw-bold">Result: ${data.boolean}</div>`;
+    info.textContent = `Done in ${elapsed} ms`;
+    return;
+  }
+  const bindings = data?.results?.bindings ?? [];
+  const vars     = data?.head?.vars ?? [];
+  if (!bindings.length) {
+    wrap.innerHTML = '<div class="alert alert-secondary mt-2">No results.</div>';
+    info.textContent = `0 results in ${elapsed} ms`;
+    return;
+  }
+  let html = `<div class="table-responsive mt-2">
+    <table class="table table-sm table-hover table-bordered" id="results-table">
+    <thead class="table-dark"><tr>${vars.map(v=>`<th>${esc(v)}</th>`).join('')}</tr></thead><tbody>`;
+  for (const row of bindings) {
+    html += '<tr>' + vars.map(v => {
+      const cell = row[v];
+      if (!cell) return '<td class="text-muted">—</td>';
+      const val = esc(cell.value);
+      if (cell.type === 'uri')
+        return `<td><a href="${val}" target="_blank" rel="noopener">${val}</a></td>`;
+      const lang = cell['xml:lang'] ? ` <span class="badge bg-light text-dark">@${cell['xml:lang']}</span>` : '';
+      return `<td>${val}${lang}</td>`;
+    }).join('') + '</tr>';
+  }
+  html += '</tbody></table></div>';
+  html += `<small class="text-muted">${bindings.length} results in ${elapsed} ms</small>`;
+  wrap.innerHTML = html;
+  info.textContent = `${bindings.length} results in ${elapsed} ms`;
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  const params = new URLSearchParams(location.search);
+  const presel = params.get('dataset');
+  const dsSel  = document.getElementById('datasetSelect');
+  if (presel) {
+    for (const opt of dsSel.options) {
+      if (opt.value === presel) { dsSel.value = presel; break; }
+    }
+  }
+  applyDataset(getSelectedOption());
+});
+</script>
+{% endblock %}

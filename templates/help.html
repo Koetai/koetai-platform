@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+{% block title %}Help{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-9">
+
+    <h2 class="mb-1"><i class="bi bi-book"></i> Koetai — Help &amp; Documentation</h2>
+    <p class="text-muted mb-4">Everything you need to publish, query and maintain FAIR RDF datasets.</p>
+
+    <!-- TOC -->
+    <div class="card mb-4 border-0 bg-light">
+      <div class="card-body py-3">
+        <strong>Contents</strong>
+        <ol class="mb-0 mt-2 ps-4">
+          <li><a href="#overview">Overview</a></li>
+          <li><a href="#getting-started">Getting started</a></li>
+          <li><a href="#datasets">Datasets &amp; triplestores</a></li>
+          <li><a href="#upload">Uploading RDF data</a></li>
+          <li><a href="#git">Git repository sources (GitHub / GitLab)</a></li>
+          <li><a href="#web">Web download sources</a></li>
+          <li><a href="#sparql">SPARQL endpoint</a></li>
+          <li><a href="#shapes">Shape inference &amp; validation</a></li>
+          <li><a href="#api">Parameterized REST API (SPARQLList)</a></li>
+          <li><a href="#examples">Saved query examples</a></li>
+          <li><a href="#owl">OWL reasoning</a></li>
+          <li><a href="#formats">Supported RDF formats</a></li>
+        </ol>
+      </div>
+    </div>
+
+    <!-- 1 -->
+    <h4 id="overview" class="mt-4"><i class="bi bi-info-circle text-primary"></i> Overview</h4>
+    <p>
+      Koetai is a self-hosted FAIR SPARQL platform. Each registered user can create multiple
+      <em>datasets</em>. Every dataset gets a dedicated named graph and a public SPARQL endpoint,
+      backed by either <strong>QLever</strong> (ultra-fast read-only index) or
+      <strong>Apache Jena Fuseki</strong> (updateable TDB2 store).
+    </p>
+    <p>
+      RDF data can be loaded from local file uploads, GitHub/GitLab repositories, or arbitrary
+      web download pages. Shapes (ShEx / SHACL) can be inferred automatically and visualised as
+      Mermaid class diagrams. Any SPARQL query can be turned into a parameterized REST endpoint.
+    </p>
+
+    <!-- 2 -->
+    <h4 id="getting-started" class="mt-4"><i class="bi bi-play-circle text-success"></i> Getting started</h4>
+    <p>Koetai is <strong>invitation-only</strong>. To register:</p>
+    <ol>
+      <li>Obtain an invite link from an existing user or admin.</li>
+      <li>Click the invite link — it will redirect you to the ORCID sign-in page.</li>
+      <li>Authenticate with your <a href="https://orcid.org" target="_blank">ORCID iD</a>. If you
+          don't have one, registration is free at orcid.org.</li>
+      <li>After the first login your account is created automatically and the invite is consumed.</li>
+    </ol>
+    <p>Admins can generate invite links from the <strong>Invites</strong> menu item (visible only
+       to admins after sign-in).</p>
+
+    <!-- 3 -->
+    <h4 id="datasets" class="mt-4"><i class="bi bi-database text-primary"></i> Datasets &amp; triplestores</h4>
+    <p>
+      Create a dataset from <strong>My Datasets → New Dataset</strong>. Each dataset requires:
+    </p>
+    <ul>
+      <li><strong>Slug</strong> — a URL-safe identifier (e.g. <code>ordo</code>). Forms part of the
+          endpoint URL: <code>/u/{orcid}/{slug}/sparql</code>.</li>
+      <li><strong>Label</strong> — human-readable name.</li>
+      <li><strong>Platform</strong>:
+        <ul>
+          <li><em>QLever</em> — blazing-fast for large read-only datasets. Data is indexed into an
+              inverted index; re-indexing is required after each bulk load.</li>
+          <li><em>Fuseki</em> — Apache Jena TDB2, immediately queryable after each upload. Better
+              for datasets that change frequently.</li>
+        </ul>
+      </li>
+    </ul>
+    <p>All triples are stored inside a named graph
+       <code>https://koetai.semscape.org/u/{orcid}/{slug}/data</code>.</p>
+
+    <!-- 4 -->
+    <h4 id="upload" class="mt-4"><i class="bi bi-upload text-warning"></i> Uploading RDF data</h4>
+    <p>From the dataset page, use the <strong>Upload</strong> tab to load a local file (up to 500 MB).
+       Supported formats: <code>.ttl</code>, <code>.nt</code>, <code>.n3</code>, <code>.rdf</code>,
+       <code>.owl</code>, <code>.trig</code>, <code>.nq</code>, <code>.jsonld</code>.</p>
+    <p>For <code>.owl</code> and <code>.rdf</code> files an <em>Apply OWL reasoning</em> checkbox
+       appears — see the <a href="#owl">OWL reasoning</a> section below.</p>
+    <p>After upload, QLever datasets are automatically re-indexed (this may take a few seconds to
+       minutes depending on file size). Fuseki datasets are immediately queryable.</p>
+
+    <!-- 5 -->
+    <h4 id="git" class="mt-4"><i class="bi bi-git text-dark"></i> Git repository sources</h4>
+    <p>From the dataset page, click the <strong>Git</strong> tab. You can link one or more GitHub
+       or GitLab repositories:</p>
+    <ol>
+      <li>Choose <strong>GitHub</strong> or <strong>GitLab</strong> from the provider dropdown.</li>
+      <li>Enter the repository as <code>owner/repository</code> (e.g. <code>Orphanet/ORDO</code>).</li>
+      <li>Optionally specify a branch (auto-detected if left blank) and a subfolder path.</li>
+      <li>Click <strong>Add</strong>. The source appears in the list.</li>
+    </ol>
+    <p>For each source you can then:</p>
+    <ul>
+      <li><strong>Browse files</strong> — lists all RDF/OWL files found recursively. Select and
+          import with optional OWL reasoning.</li>
+      <li><strong>Check updates</strong> — compares the current HEAD commit SHA against the last
+          imported SHA. A yellow badge appears if a new commit is available.</li>
+    </ul>
+    <p class="text-muted small">
+      A GitHub personal access token in <code>.env</code> (<code>GITHUB_TOKEN</code>) removes the
+      60 req/hr anonymous rate limit. Similarly <code>GITLAB_TOKEN</code> for private GitLab repos.
+    </p>
+
+    <!-- 6 -->
+    <h4 id="web" class="mt-4"><i class="bi bi-globe2 text-info"></i> Web download sources</h4>
+    <p>From the dataset page, click the <strong>Web</strong> tab. Paste the URL of any download page
+       (e.g. <a href="https://sciences.orphadata.com/ordo/" target="_blank">Orphadata</a> or
+       <a href="https://data.wikipathways.org" target="_blank">WikiPathways</a>).</p>
+    <ol>
+      <li>Click <strong>Scan for files</strong> — the page is fetched and all hyperlinks pointing to
+          RDF/OWL files are discovered. HTTP HEAD requests capture ETag, Last-Modified, and file
+          size.</li>
+      <li>Select the files you want and click <strong>Import selected</strong>.</li>
+      <li>Later, click <strong>Check updates</strong> — HEAD requests are repeated and the ETag /
+          Last-Modified headers are compared to detect new versions. A yellow badge appears when a
+          file has changed.</li>
+    </ol>
+
+    <!-- 7 -->
+    <h4 id="sparql" class="mt-4"><i class="bi bi-braces text-success"></i> SPARQL endpoint</h4>
+    <p>Every dataset exposes a SPARQL 1.1 endpoint at:</p>
+    <pre class="border rounded p-2 bg-light"><code>https://koetai.semscape.org/u/{orcid}/{slug}/sparql</code></pre>
+    <p>The endpoint accepts <code>GET</code> and <code>POST</code> with a <code>query</code>
+       parameter. Public datasets are readable without authentication.</p>
+    <p>Click the <strong>SPARQL</strong> tab from the dataset page to open the built-in
+       <a href="https://triply.cc/docs/yasgui/" target="_blank">YASGUI</a> editor with the endpoint
+       pre-configured.</p>
+
+    <!-- 8 -->
+    <h4 id="shapes" class="mt-4"><i class="bi bi-check2-square text-danger"></i> Shape inference &amp; validation</h4>
+    <p>Click the <strong>Shapes</strong> tab on any dataset page.</p>
+    <h6>Inference</h6>
+    <ul>
+      <li><strong>ShExer (ShEx)</strong> — samples triples from the triplestore, infers a ShEx schema
+          and shows per-property coverage statistics as progress bars. Also generates a Mermaid class
+          diagram.</li>
+      <li><strong>ShExer (SHACL)</strong> — same tool, SHACL output.</li>
+    </ul>
+    <h6>Validation</h6>
+    <ul>
+      <li><strong>Apache Jena ShEx validate</strong> — validates the dataset against a saved ShEx
+          schema using the Jena CLI.</li>
+      <li><strong>RUDOF validate</strong> — validates using the
+          <a href="https://github.com/rudof-project/rudof" target="_blank">rudof</a> Rust binary.</li>
+    </ul>
+    <p>Inferred shapes are saved to the database and can be downloaded as plain text or viewed as a
+       Mermaid diagram.</p>
+
+    <!-- 9 -->
+    <h4 id="api" class="mt-4"><i class="bi bi-plug text-warning"></i> Parameterized REST API</h4>
+    <p>Click the <strong>API</strong> tab. Each <em>SPARQLList query</em> is a SPARQL template with
+       <code>&#123;&#123;param&#125;&#125;</code> placeholders that become URL query parameters.</p>
+    <p>Example: a template with <code>FILTER(?disease = &lt;&#123;&#123;iri&#125;&#125;&gt;)</code>
+       is called as:</p>
+    <pre class="border rounded p-2 bg-light"><code>/u/{orcid}/{slug}/api/{query-slug}?iri=http://example.org/disease/123</code></pre>
+    <p>Results are returned as JSON-LD by default. An interactive form is shown in the browser for
+       manual testing.</p>
+
+    <!-- 10 -->
+    <h4 id="examples" class="mt-4"><i class="bi bi-journals text-secondary"></i> Saved query examples</h4>
+    <p>Click the <strong>Examples</strong> tab to create named SPARQL queries that are stored with
+       the dataset. Examples have a slug, label, optional description, keywords, and the query text.
+       They can be run directly in the built-in SPARQL editor.</p>
+
+    <!-- 11 -->
+    <h4 id="owl" class="mt-4"><i class="bi bi-gear text-muted"></i> OWL reasoning</h4>
+    <p>When importing <code>.owl</code> or <code>.rdf</code> files (via upload, Git, or Web sources),
+       an <em>Apply OWL reasoning</em> option appears. Three regimes are available:</p>
+    <ul>
+      <li><strong>OWL RL</strong> (recommended) — scalable rule-based OWL 2 RL reasoning via the
+          <a href="https://github.com/RDFLib/OWL-RL" target="_blank">owlrl</a> Python library.
+          Materializes inferred triples before loading into the triplestore.</li>
+      <li><strong>RDFS</strong> — RDFS-only closure (subClassOf, domain, range, etc.). Fast.</li>
+      <li><strong>OWL RL+</strong> — OWL RL with additional rules (Extra).</li>
+    </ul>
+    <p>Reasoning runs as a subprocess; the number of inferred triples is shown in the import
+       result.</p>
+
+    <!-- 12 -->
+    <h4 id="formats" class="mt-4"><i class="bi bi-file-earmark-code text-primary"></i> Supported RDF formats</h4>
+    <table class="table table-sm table-bordered w-auto">
+      <thead class="table-light"><tr><th>Extension</th><th>Format</th></tr></thead>
+      <tbody>
+        <tr><td><code>.ttl</code></td><td>Turtle</td></tr>
+        <tr><td><code>.nt</code></td><td>N-Triples</td></tr>
+        <tr><td><code>.n3</code></td><td>Notation3</td></tr>
+        <tr><td><code>.rdf</code></td><td>RDF/XML</td></tr>
+        <tr><td><code>.owl</code></td><td>OWL/RDF-XML</td></tr>
+        <tr><td><code>.trig</code></td><td>TriG (named graphs)</td></tr>
+        <tr><td><code>.nq</code></td><td>N-Quads</td></tr>
+        <tr><td><code>.jsonld</code></td><td>JSON-LD</td></tr>
+      </tbody>
+    </table>
+
+    <div class="mt-5 mb-4 text-muted small">
+      <hr>
+      Koetai is built on <a href="https://github.com/ad-freiburg/qlever" target="_blank">QLever</a>,
+      <a href="https://jena.apache.org/documentation/fuseki2/" target="_blank">Apache Jena Fuseki</a>,
+      <a href="https://github.com/weso/shexer" target="_blank">ShExer</a>,
+      <a href="https://github.com/rudof-project/rudof" target="_blank">rudof</a>,
+      <a href="https://github.com/RDFLib/OWL-RL" target="_blank">owlrl</a>, and
+      <a href="https://triply.cc/docs/yasgui/" target="_blank">YASGUI</a>.
+    </div>
+
+  </div>
+</div>
+{% endblock %}

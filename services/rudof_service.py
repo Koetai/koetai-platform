@@ -6,15 +6,13 @@ import config
 
 
 def infer_shacl(rdf_file: Path) -> tuple[bool, str]:
-    """Infer SHACL shapes from an RDF file using RUDOF."""
-    cmd = [config.RUDOF_BIN, "shacl-infer", "--input", str(rdf_file)]
-    return _run_rudof(cmd)
+    """Infer SHACL shapes — not supported in this version of rudof."""
+    return False, "SHACL inference is not available in this version of rudof. Use ShExer instead."
 
 
 def infer_shex_rudof(rdf_file: Path) -> tuple[bool, str]:
-    """Infer ShEx shapes from an RDF file using RUDOF."""
-    cmd = [config.RUDOF_BIN, "shex-infer", "--input", str(rdf_file)]
-    return _run_rudof(cmd)
+    """Infer ShEx shapes — not supported in this version of rudof."""
+    return False, "ShEx inference is not available in this version of rudof. Use ShExer instead."
 
 
 def validate_shex(rdf_file: Path, shex_content: str, node_selector: str = None) -> tuple[bool, str]:
@@ -26,8 +24,8 @@ def validate_shex(rdf_file: Path, shex_content: str, node_selector: str = None) 
     cmd = [
         config.RUDOF_BIN, "validate",
         "--schema", shex_path,
-        "--data",   str(rdf_file),
-        "--schema-format", "ShExC",
+        "--schema-format", "shexc",
+        str(rdf_file),
     ]
     if node_selector:
         cmd += ["--node", node_selector]
@@ -46,7 +44,7 @@ def validate_shacl(rdf_file: Path, shacl_content: str) -> tuple[bool, str]:
     cmd = [
         config.RUDOF_BIN, "shacl-validate",
         "--shapes", shacl_path,
-        "--data",   str(rdf_file),
+        str(rdf_file),
     ]
     ok, out = _run_rudof(cmd)
     Path(shacl_path).unlink(missing_ok=True)

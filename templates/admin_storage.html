@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Storage — Admin{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2><i class="bi bi-hdd-stack"></i> Storage per User</h2>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('dashboard.costs') }}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-currency-euro"></i> Cost overview
+    </a>
+    <a href="{{ url_for('dashboard.invites') }}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-envelope-plus"></i> Invites
+    </a>
+  </div>
+</div>
+
+<!-- Disk summary bar -->
+<div class="card mb-4 border-0 shadow-sm">
+  <div class="card-body">
+    <div class="d-flex justify-content-between mb-1">
+      <span class="small fw-semibold">Server disk usage</span>
+      <span class="small text-muted">{{ disk_used_gb }} GB / {{ disk_total_gb }} GB</span>
+    </div>
+    <div class="progress mb-2" style="height:18px">
+      <div class="progress-bar bg-{{ 'danger' if disk_pct > 85 else ('warning' if disk_pct > 65 else 'primary') }}"
+           style="width:{{ disk_pct }}%">{{ disk_pct }}%</div>
+    </div>
+    <div class="text-muted small">
+      Upload data managed by Koetai: <strong>{{ total_gb }} GB</strong>
+    </div>
+  </div>
+</div>
+
+<!-- Per-user table -->
+{% if rows %}
+<div class="table-responsive">
+  <table class="table table-hover align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>User</th>
+        <th>ORCID</th>
+        <th class="text-end">Total upload</th>
+        <th style="width:30%">Usage bar</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for r in rows %}
+    <tr data-bs-toggle="collapse" data-bs-target="#ds-{{ r.id }}"
+        style="cursor:pointer">
+      <td>
+        {{ r.name }}
+        {% if r.is_admin %}<span class="badge bg-primary ms-1">admin</span>{% endif %}
+      </td>
+      <td class="text-muted small">{{ r.orcid_id }}</td>
+      <td class="text-end fw-semibold">
+        {% if r.mb >= 1000 %}
+          {{ "%.2f"|format(r.gb) }} GB
+        {% elif r.mb > 0 %}
+          {{ "%.1f"|format(r.mb) }} MB
+        {% else %}
+          <span class="text-muted">—</span>
+        {% endif %}
+      </td>
+      <td>
+        {% if total_gb > 0 %}
+        {% set pct = (r.bytes / (total_gb * 1e9) * 100) | round(1) %}
+        <div class="progress" style="height:12px" title="{{ pct }}%">
+          <div class="progress-bar bg-teal" style="width:{{ pct }}%; background:var(--koetai-teal)"></div>
+        </div>
+        <span class="text-muted" style="font-size:.75rem">{{ pct }}% of managed storage</span>
+        {% endif %}
+      </td>
+      <td class="text-end text-muted small">
+        <i class="bi bi-chevron-down"></i>
+      </td>
+    </tr>
+    <!-- Collapsible dataset breakdown -->
+    <tr class="collapse" id="ds-{{ r.id }}">
+      <td colspan="5" class="p-0">
+        <div class="bg-light border-start border-4 ps-4 py-2 ms-3"
+             style="border-color:var(--koetai-teal) !important">
+          {% if r.datasets %}
+          <table class="table table-sm mb-0">
+            <thead><tr>
+              <th>Dataset</th>
+              <th class="text-end">Size</th>
+            </tr></thead>
+            <tbody>
+            {% for ds in r.datasets %}
+            <tr>
+              <td>
+                <a href="{{ url_for('datasets.view', owner_orcid=r.orcid_id, slug=ds.slug) }}"
+                   class="text-decoration-none">{{ ds.label }}</a>
+                <span class="text-muted small ms-1">({{ ds.slug }})</span>
+              </td>
+              <td class="text-end text-muted small">
+                {% if ds.mb >= 1000 %}
+                  {{ "%.2f"|format(ds.mb / 1000) }} GB
+                {% elif ds.mb > 0 %}
+                  {{ ds.mb }} MB
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+          {% else %}
+          <span class="text-muted small">No datasets</span>
+          {% endif %}
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+    <tfoot class="table-light fw-bold">
+      <tr>
+        <td colspan="2">Total managed uploads</td>
+        <td class="text-end">{{ total_gb }} GB</td>
+        <td colspan="2"></td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+{% else %}
+<p class="text-muted">No users yet.</p>
+{% endif %}
+{% endblock %}

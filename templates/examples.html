@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% from '_ds_nav.html' import ds_nav with context %}
+{% block title %}Examples — {{ ds.label }}{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">My Datasets</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('datasets.view', owner_orcid=ds.orcid_id, slug=ds.slug) }}">{{ ds.label }}</a></li>
+    <li class="breadcrumb-item active">Examples</li>
+  </ol>
+</nav>
+{{ ds_nav(ds, 'examples') }}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4>SPARQL Examples</h4>
+  {% if current_user.is_authenticated and current_user.id == ds.user_id %}
+  <a href="{{ url_for('examples.new_example', owner_orcid=ds.orcid_id, slug=ds.slug) }}" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-lg"></i> New Example
+  </a>
+  {% endif %}
+</div>
+
+{% if examples %}
+<div class="accordion" id="exampleAccordion">
+{% for ex in examples %}
+<div class="accordion-item">
+  <h2 class="accordion-header">
+    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#ex-{{ ex.id }}">
+      <strong>{{ ex.label }}</strong>
+      {% if ex.keywords %}
+        {% for kw in (ex.keywords | from_json) %}
+        <span class="badge bg-light text-dark ms-1 small">{{ kw }}</span>
+        {% endfor %}
+      {% endif %}
+    </button>
+  </h2>
+  <div id="ex-{{ ex.id }}" class="accordion-collapse collapse">
+    <div class="accordion-body">
+      {% if ex.description %}<p class="text-muted">{{ ex.description }}</p>{% endif %}
+      <pre class="shex">{{ ex.query }}</pre>
+      <div class="d-flex gap-2 mt-2">
+        <button class="btn btn-sm btn-primary" onclick="runExample('{{ ex.slug }}', {{ ex.id }})">
+          <i class="bi bi-play-fill"></i> Run
+        </button>
+        <a href="{{ url_for('datasets.sparql_endpoint', owner_orcid=ds.orcid_id, slug=ds.slug) }}?query={{ ex.query | urlencode }}"
+           class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-box-arrow-up-right"></i> Open in SPARQL editor
+        </a>
+        {% if current_user.is_authenticated and current_user.id == ds.user_id %}
+        <button class="btn btn-sm btn-outline-danger ms-auto" onclick="deleteExample('{{ ex.slug }}')">
+          <i class="bi bi-trash"></i>
+        </button>
+        {% endif %}
+      </div>
+      <div id="result-{{ ex.id }}" class="mt-2"></div>
+    </div>
+  </div>
+</div>
+{% endfor %}
+</div>
+{% else %}
+<p class="text-muted">No examples yet.
+  {% if current_user.is_authenticated and current_user.id == ds.user_id %}
+  <a href="{{ url_for('examples.new_example', owner_orcid=ds.orcid_id, slug=ds.slug) }}">Add the first one.</a>
+  {% endif %}
+</p>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const OWNER = '{{ ds.orcid_id }}';
+const SLUG  = '{{ ds.slug }}';
+
+async function runExample(exSlug, exId) {
+  const el = document.getElementById('result-' + exId);
+  el.innerHTML = '<div class="spinner-border spinner-border-sm"></div> Running…';
+  const r = await fetch(`/u/${OWNER}/${SLUG}/examples/${exSlug}/run`, {method:'POST'});
+  const d = await r.json();
+  const bindings = d?.results?.bindings || [];
+  if (!bindings.length) { el.innerHTML = '<em class="text-muted">No results.</em>'; return; }
+  const cols = Object.keys(bindings[0]);
+  let html = '<table class="table table-sm table-bordered mt-2"><thead><tr>' +
+    cols.map(c=>`<th>${c}</th>`).join('') + '</tr></thead><tbody>';
+  for (const row of bindings.slice(0, 50)) {
+    html += '<tr>' + cols.map(c=>`<td>${row[c]?.value ?? ''}</td>`).join('') + '</tr>';
+  }
+  html += '</tbody></table>';
+  if (bindings.length > 50) html += `<small class="text-muted">Showing 50 of ${bindings.length}</small>`;
+  el.innerHTML = html;
+}
+
+async function deleteExample(exSlug) {
+  if (!confirm('Delete this example?')) return;
+  await fetch(`/u/${OWNER}/${SLUG}/examples/${exSlug}/delete`, {method:'POST'});
+  location.reload();
+}
+</script>
+{% endblock %}

@@ -1,48 +1,131 @@
 {% extends "base.html" %}
 {% block title %}Welcome{% endblock %}
 {% block content %}
-<div class="row justify-content-center mt-5">
-  <div class="col-lg-8 text-center">
-    <h1 class="display-5 fw-bold" style="color:var(--koetai-blue)">
-      <i class="bi bi-diagram-3"></i> Koetai
-    </h1>
-    <p class="lead text-muted">A FAIR SPARQL endpoint platform — publish, query, validate and share RDF datasets.</p>
-    <div class="row g-3 mt-4 text-start">
+<div class="row justify-content-center mt-4">
+  <div class="col-lg-8">
+
+    <!-- Hero -->
+    <div class="text-center mb-4">
+      <h1 class="display-5 fw-bold mb-1" style="color:var(--koetai-blue)">Koetai</h1>
+      <p class="lead text-muted mb-3">A FAIR SPARQL endpoint platform — publish, query, validate and share RDF datasets.</p>
+      <div class="d-flex justify-content-center gap-2 flex-wrap">
+        {% if not current_user.is_authenticated %}
+        <a href="{{ url_for('auth.login') }}" class="btn btn-primary">
+          <img src="https://orcid.org/sites/default/files/images/orcid_16x16.png" width="16" class="me-1"> Sign in with ORCID
+        </a>
+        {% else %}
+        <a href="{{ url_for('dashboard.index') }}" class="btn btn-primary">Go to My Datasets</a>
+        {% endif %}
+        <a href="{{ url_for('helppage') }}" class="btn btn-outline-secondary">
+          <i class="bi bi-book"></i> Full documentation
+        </a>
+      </div>
+    </div>
+
+    <!-- Short readme -->
+    <div class="card shadow-sm mb-4">
+      <div class="card-body">
+        <h5 class="card-title"><i class="bi bi-info-circle text-primary"></i> What is Koetai?</h5>
+        <p class="mb-2">
+          Koetai lets you host RDF knowledge graphs and expose them as FAIR, standards-compliant
+          SPARQL endpoints — without managing server infrastructure yourself. It is designed for
+          ontologists, bioinformaticians and Linked Data practitioners who want to share semantic
+          data quickly and reliably.
+        </p>
+        <p class="mb-0">
+          Each <strong>dataset</strong> you create gets its own named graph, a public SPARQL
+          endpoint, shape schemas (ShEx / SHACL), a Mermaid diagram and a parameterized REST API.
+          Data can be loaded from local files, GitHub/GitLab repositories, web download pages,
+          or directly from tabular formats like CSV, Excel and Parquet.
+        </p>
+      </div>
+    </div>
+
+    <!-- Feature cards -->
+    <div class="row g-3 mb-4">
       <div class="col-md-4">
         <div class="card h-100 shadow-sm">
           <div class="card-body">
-            <h6><i class="bi bi-upload text-primary"></i> Upload RDF</h6>
-            <small class="text-muted">Turtle, N-Triples, RDF/XML and more. Your data gets a public SPARQL endpoint instantly.</small>
+            <h6><i class="bi bi-upload text-primary"></i> Load RDF data</h6>
+            <small class="text-muted">
+              Upload files up to 500 MB (Turtle, N-Triples, RDF/XML, OWL, JSON-LD …),
+              pull from GitHub/GitLab repositories, or scrape RDF links from any download page.
+              Optional OWL RL reasoning materializes inferred triples before indexing.
+            </small>
           </div>
         </div>
       </div>
       <div class="col-md-4">
         <div class="card h-100 shadow-sm">
           <div class="card-body">
-            <h6><i class="bi bi-check2-circle text-success"></i> Validate Shapes</h6>
-            <small class="text-muted">Infer ShEx or SHACL schemas with ShExer &amp; RUDOF. Validate and download Mermaid diagrams.</small>
+            <h6><i class="bi bi-check2-circle text-success"></i> Shapes &amp; validation</h6>
+            <small class="text-muted">
+              Infer ShEx or SHACL schemas automatically with ShExer. Visualise the schema as a
+              Mermaid class diagram with per-property coverage statistics. Validate with Apache
+              Jena or RUDOF.
+            </small>
           </div>
         </div>
       </div>
       <div class="col-md-4">
         <div class="card h-100 shadow-sm">
           <div class="card-body">
-            <h6><i class="bi bi-braces text-warning"></i> REST API</h6>
-            <small class="text-muted">Turn any SPARQL query into a REST endpoint with SPARQLList-style parameterized templates.</small>
+            <h6><i class="bi bi-plug text-warning"></i> REST API</h6>
+            <small class="text-muted">
+              Turn any SPARQL query into a parameterized REST endpoint
+              (<code>&#123;&#123;param&#125;&#125;</code> placeholders → URL query params).
+              Returns JSON; interactive test form included.
+            </small>
           </div>
         </div>
       </div>
     </div>
-    <div class="mt-5">
-      {% if not current_user.is_authenticated %}
-      <p class="text-muted">Koetai is invitation-only. If you have an invite link, click it to register.</p>
-      <a href="{{ url_for('auth.login') }}" class="btn btn-primary btn-lg">
-        <img src="https://orcid.org/sites/default/files/images/orcid_16x16.png" width="16" class="me-1"> Sign in with ORCID
-      </a>
-      {% else %}
-      <a href="{{ url_for('dashboard.index') }}" class="btn btn-primary btn-lg">Go to My Datasets</a>
-      {% endif %}
+
+    <!-- Tabular mapping feature highlight -->
+    <div class="card shadow-sm mb-4 border-0" style="background:linear-gradient(135deg,#f0f6ff 0%,#f5f0ff 100%)">
+      <div class="card-body">
+        <div class="d-flex align-items-start gap-3">
+          <div class="flex-shrink-0 pt-1">
+            <span style="font-size:2rem; line-height:1">
+              <i class="bi bi-file-earmark-arrow-up" style="color:#1a4a8a"></i>
+            </span>
+          </div>
+          <div>
+            <h6 class="fw-bold mb-1" style="color:#1a4a8a">
+              New: upload tabular data directly
+            </h6>
+            <p class="small text-muted mb-2">
+              No RDF? No problem. Upload a <strong>Parquet, CSV, Excel or JSON</strong> file and
+              map its columns to ontology terms using the built-in mapping wizard — powered by
+              <a href="https://github.com/morph-kgc/morph-kgc" target="_blank" rel="noopener">Morph-KGC</a>.
+              Predicates and classes are looked up live from the
+              <a href="https://www.ebi.ac.uk/ols4" target="_blank" rel="noopener">EBI Ontology Lookup Service</a>
+              as you type, so you can map columns to standard ontology terms (HPO, GO, SNOMED, schema.org, …)
+              without leaving Koetai.
+            </p>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+              <span class="badge rounded-pill" style="background:#dbeafe; color:#1e40af">Parquet</span>
+              <span class="badge rounded-pill" style="background:#dbeafe; color:#1e40af">CSV / TSV</span>
+              <span class="badge rounded-pill" style="background:#dbeafe; color:#1e40af">Excel</span>
+              <span class="badge rounded-pill" style="background:#dbeafe; color:#1e40af">JSON</span>
+              <span class="text-muted small">→ RDF via YARRRML + Morph-KGC → SPARQL endpoint</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
+
+    <!-- Access note -->
+    {% if not current_user.is_authenticated %}
+    <div class="alert alert-light border text-center small text-muted mb-0">
+      <i class="bi bi-lock"></i>
+      Koetai is <strong>invitation-only</strong>. Ask an existing user for an invite link, then
+      sign in with your <a href="https://orcid.org" target="_blank">ORCID iD</a>.
+      &nbsp;·&nbsp;
+      <a href="{{ url_for('helppage') }}">Read the full documentation</a>
+    </div>
+    {% endif %}
+
   </div>
 </div>
 {% endblock %}

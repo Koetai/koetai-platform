@@ -1,0 +1,69 @@
+{#
+  Provenance badge macros.
+  Usage:
+    {% from '_provenance.html' import badge_qlever, badge_fuseki, badge_sparqlist, badge_rudof, badge_shexer %}
+    {{ badge_qlever() }}
+#}
+
+{% macro badge_qlever(size="sm") %}
+<a href="https://github.com/ad-freiburg/qlever" target="_blank" rel="noopener"
+   title="Powered by QLever — University of Freiburg" class="text-decoration-none">
+  <svg width="{{ '80' if size == 'md' else '60' }}" height="{{ '22' if size == 'md' else '18' }}"
+       viewBox="0 0 80 22" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="QLever">
+    <rect width="80" height="22" rx="3" fill="#1a3a5c"/>
+    <polygon points="18,4 12,11 16,11 10,18 22,10 17,10" fill="#f0c040"/>
+    <text x="28" y="15" font-family="Arial,sans-serif" font-size="11" font-weight="bold" fill="white">QLever</text>
+  </svg>
+</a>
+{% endmacro %}
+
+{% macro badge_fuseki(size="sm") %}
+<a href="https://jena.apache.org/documentation/fuseki2/" target="_blank" rel="noopener"
+   title="Powered by Apache Jena Fuseki" class="text-decoration-none">
+  <svg width="{{ '100' if size == 'md' else '76' }}" height="{{ '22' if size == 'md' else '18' }}"
+       viewBox="0 0 100 22" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Apache Jena Fuseki">
+    <rect width="100" height="22" rx="3" fill="#3c5a3c"/>
+    <!-- Simplified owl/elephant shape -->
+    <circle cx="11" cy="11" r="7" fill="#6aaa6a"/>
+    <circle cx="9"  cy="9"  r="1.5" fill="white"/>
+    <circle cx="13" cy="9"  r="1.5" fill="white"/>
+    <path d="M8,14 Q11,17 14,14" stroke="white" stroke-width="1.2" fill="none"/>
+    <text x="24" y="15" font-family="Arial,sans-serif" font-size="10" font-weight="bold" fill="white">Apache Jena</text>
+  </svg>
+</a>
+{% endmacro %}
+
+{% macro badge_sparqlist(size="sm") %}
+<a href="https://github.com/dbcls/sparqlist" target="_blank" rel="noopener"
+   title="Powered by SPARQList — DBCLS" class="text-decoration-none">
+  <svg width="{{ '110' if size == 'md' else '86' }}" height="{{ '22' if size == 'md' else '18' }}"
+       viewBox="0 0 110 22" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="SPARQList DBCLS">
+    <rect width="110" height="22" rx="3" fill="#c0392b"/>
+    <rect width="40"  height="22" rx="3" fill="#922b21"/>
+    <text x="4"  y="15" font-family="Arial,sans-serif" font-size="10" font-weight="bold" fill="white">DBCLS</text>
+    <text x="44" y="15" font-family="Arial,sans-serif" font-size="10" font-weight="bold" fill="white">SPARQList</text>
+  </svg>
+</a>
+{% endmacro %}
+
+{% macro badge_rudof(size="sm") %}
+<a href="https://github.com/rudof-project/rudof" target="_blank" rel="noopener"
+   title="Powered by RUDOF — RDF shapes validator" class="text-decoration-none">
+  <svg width="{{ '72' if size == 'md' else '56' }}" height="{{ '22' if size == 'md' else '18' }}"
+       viewBox="0 0 72 22" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="RUDOF">
+    <rect width="72" height="22" rx="3" fill="#5b3a8a"/>
+    <text x="8" y="15" font-family="Arial,sans-serif" font-size="11" font-weight="bold" fill="white">RUDOF</text>
+  </svg>
+</a>
+{% endmacro %}
+
+{% macro badge_shexer(size="sm") %}
+<a href="https://github.com/DaniFdezAlvarez/shexer" target="_blank" rel="noopener"
+   title="Powered by ShExer — shape inference" class="text-decoration-none">
+  <svg width="{{ '76' if size == 'md' else '60' }}" height="{{ '22' if size == 'md' else '18' }}"
+       viewBox="0 0 76 22" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ShExer">
+    <rect width="76" height="22" rx="3" fill="#1a6b8a"/>
+    <text x="8" y="15" font-family="Arial,sans-serif" font-size="11" font-weight="bold" fill="white">ShExer</text>
+  </svg>
+</a>
+{% endmacro %}

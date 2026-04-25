@@ -1,0 +1,75 @@
+{#
+  Shared dataset tab navigation.
+  Import WITH context so current_user is available:
+    {% from '_ds_nav.html' import ds_nav with context %}
+  Usage: {{ ds_nav(ds, 'upload') }}
+  active: overview | upload | sparql | examples | shapes | api | git | web | fdp | fdp-meta
+#}
+{% macro ds_nav(ds, active) %}
+<ul class="nav nav-tabs mt-3 mb-3" id="dsTabs">
+  <li class="nav-item">
+    <a class="nav-link {% if active == 'overview' %}active{% endif %}"
+       href="{{ url_for('datasets.view', owner_orcid=ds.orcid_id, slug=ds.slug) }}">
+      <i class="bi bi-house"></i> Overview
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if active == 'upload' %}active{% endif %}"
+       href="{{ url_for('datasets.upload_page', owner_orcid=ds.orcid_id, slug=ds.slug) }}">
+      <i class="bi bi-upload"></i> Upload
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if active == 'sparql' %}active{% endif %}"
+       href="{{ url_for('datasets.sparql_endpoint', owner_orcid=ds.orcid_id, slug=ds.slug) }}">
+      <i class="bi bi-braces"></i> SPARQL
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if active == 'examples' %}active{% endif %}"
+       href="{{ url_for('examples.list_examples', owner_orcid=ds.orcid_id, slug=ds.slug) }}">
+      <i class="bi bi-collection"></i> Examples
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if active == 'shapes' %}active{% endif %}"
+       href="{{ url_for('shapes.view', owner_orcid=ds.orcid_id, slug=ds.slug) }}">
+      <i class="bi bi-diagram-2"></i> Shapes
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if active == 'api' %}active{% endif %}"
+       href="{{ url_for('sparqlist.list_queries', owner_orcid=ds.orcid_id, slug=ds.slug) }}">
+      <i class="bi bi-plug"></i> API
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if active == 'git' %}active{% endif %}"
+       href="{{ url_for('github.view', owner_orcid=ds.orcid_id, slug=ds.slug) }}">
+      <i class="bi bi-git"></i> Git
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if active == 'web' %}active{% endif %}"
+       href="{{ url_for('web_sources.view', owner_orcid=ds.orcid_id, slug=ds.slug) }}">
+      <i class="bi bi-globe2"></i> Web
+    </a>
+  </li>
+  {% if ds.is_public %}
+  <li class="nav-item">
+    <a class="nav-link {% if active == 'fdp' %}active{% endif %}"
+       href="{{ url_for('fdp.dataset', orcid=ds.orcid_id, slug=ds.slug) }}">
+      <i class="bi bi-award text-primary"></i> FDP
+    </a>
+  </li>
+  {% endif %}
+  {% if current_user.is_authenticated and current_user.id == ds.user_id %}
+  <li class="nav-item">
+    <a class="nav-link {% if active == 'fdp-meta' %}active{% endif %}"
+       href="{{ url_for('datasets.fdp_meta_page', owner_orcid=ds.orcid_id, slug=ds.slug) }}">
+      <i class="bi bi-pencil-square"></i> FDP Metadata
+    </a>
+  </li>
+  {% endif %}
+</ul>
+{% endmacro %}

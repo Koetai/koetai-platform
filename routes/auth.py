@@ -41,14 +41,14 @@ def callback():
         )
     except Exception as e:
         flash(f"ORCID authentication failed: {e}", "error")
-        return redirect(url_for("main.index"))
+        return redirect(url_for("index"))
 
     orcid_id = token.get("orcid") or token.get("sub", "")
     name     = token.get("name", "")
 
     if not orcid_id:
         flash("Could not retrieve ORCID iD.", "error")
-        return redirect(url_for("main.index"))
+        return redirect(url_for("index"))
 
     db   = get_db()
     user = db.execute("SELECT * FROM users WHERE orcid_id = ?", (orcid_id,)).fetchone()
@@ -58,14 +58,14 @@ def callback():
         invite_code = session.pop("invite_code", None)
         if not invite_code:
             flash("An invitation code is required to register. Please use an invite link.", "warning")
-            return redirect(url_for("main.index"))
+            return redirect(url_for("index"))
 
         invite = db.execute(
             "SELECT * FROM invitations WHERE code = ? AND used_by IS NULL", (invite_code,)
         ).fetchone()
         if not invite:
             flash("Invalid or already-used invitation code.", "error")
-            return redirect(url_for("main.index"))
+            return redirect(url_for("index"))
 
         db.execute(
             "INSERT INTO users (orcid_id, name) VALUES (?, ?)", (orcid_id, name)
@@ -86,7 +86,7 @@ def callback():
 @login_required
 def logout():
     logout_user()
-    return redirect(url_for("main.index"))
+    return redirect(url_for("index"))
 
 
 @bp.route("/invite/<code>")
@@ -98,6 +98,6 @@ def accept_invite(code):
     ).fetchone()
     if not invite:
         flash("This invitation link is invalid or has already been used.", "error")
-        return redirect(url_for("main.index"))
+        return redirect(url_for("index"))
     session["invite_code"] = code
     return redirect(url_for("auth.login"))

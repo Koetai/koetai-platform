@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+{% block title %}Cost Overview{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2><i class="bi bi-currency-euro"></i> System Cost Overview</h2>
+  <span class="text-muted small">Prices in EUR · Cyso.cloud · March 2026</span>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-sm-3">
+    <div class="card text-center border-primary">
+      <div class="card-body py-3">
+        <div class="text-muted small mb-1">VM Hosting</div>
+        <div class="fs-4 fw-bold text-primary">€{{ "%.2f"|format(vm_cost) }}</div>
+        <div class="text-muted small">{{ vm_flavor }} / month</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-3">
+    <div class="card text-center">
+      <div class="card-body py-3">
+        <div class="text-muted small mb-1">Extra Storage</div>
+        <div class="fs-4 fw-bold">€{{ "%.2f"|format(storage_cost) }}</div>
+        <div class="text-muted small">{{ extra_storage_gb }} GB Tier-1 / month</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-3">
+    <div class="card text-center">
+      <div class="card-body py-3">
+        <div class="text-muted small mb-1">Claude AI</div>
+        <div class="fs-4 fw-bold">€{{ "%.2f"|format(claude_cost_eur) }}</div>
+        <div class="text-muted small">{{ claude_plan }} / month</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-3">
+    <div class="card text-center bg-light">
+      <div class="card-body py-3">
+        <div class="text-muted small mb-1">Estimated Total</div>
+        <div class="fs-4 fw-bold text-success">€{{ "%.2f"|format(total_cost) }}</div>
+        <div class="text-muted small">per month</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header fw-semibold"><i class="bi bi-hdd"></i> Disk Status</div>
+  <div class="card-body">
+    <div class="d-flex justify-content-between mb-1">
+      <span>{{ disk_used_gb }} GB used of {{ disk_total_gb }} GB</span>
+      <span class="fw-bold {% if disk_pct >= 90 %}text-danger{% elif disk_pct >= 75 %}text-warning{% else %}text-success{% endif %}">{{ disk_pct }}%</span>
+    </div>
+    <div class="progress" style="height:18px">
+      <div class="progress-bar {% if disk_pct >= 90 %}bg-danger{% elif disk_pct >= 75 %}bg-warning{% else %}bg-success{% endif %}"
+           style="width:{{ disk_pct }}%" role="progressbar">{{ disk_pct }}%</div>
+    </div>
+    {% if disk_pct >= 90 %}
+    <div class="alert alert-danger mt-3 mb-0 small">
+      <i class="bi bi-exclamation-triangle-fill"></i>
+      <strong>Disk almost full.</strong> See scaling options below.
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row g-4 mb-4">
+  <div class="col-lg-7">
+    <div class="card h-100">
+      <div class="card-header fw-semibold"><i class="bi bi-arrows-expand"></i> VM Scaling Options (Cyso.cloud)</div>
+      <div class="card-body p-0">
+        <table class="table table-hover mb-0 small">
+          <thead class="table-light">
+            <tr><th>Flavor</th><th>vCPU</th><th>RAM</th><th>Disk</th><th>€/mo</th><th>Δ</th></tr>
+          </thead>
+          <tbody>
+            {% for opt in vm_options %}
+            <tr class="{% if opt.current %}table-primary{% elif opt.below %}text-muted{% endif %}">
+              <td>
+                <span class="badge {% if opt.current %}bg-primary{% elif opt.below %}bg-secondary{% else %}bg-dark{% endif %}">
+                  {{ opt.name }}
+                </span>
+                {% if opt.current %}<strong> Current</strong>{% endif %}
+                {% if opt.below %}<small class="text-muted"> (below current)</small>{% endif %}
+              </td>
+              <td>{{ opt.vcpu }}</td>
+              <td>{{ opt.ram_gb }} GB</td>
+              <td>{{ opt.disk_gb }} GB</td>
+              <td>€{{ "%.2f"|format(opt.eur_mo) }}</td>
+              <td>
+                {% if opt.current %}—
+                {% elif opt.delta > 0 %}<span class="text-danger">+€{{ "%.2f"|format(opt.delta) }}</span>
+                {% else %}<span class="text-success">−€{{ "%.2f"|format(opt.delta|abs) }}</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="card-footer text-muted small">
+        Volume storage: Tier-1 SSD €0.095/GB/mo · Tier-2 high-IOPS €0.25/GB/mo ·
+        Edit <code>costs_config.json</code> → <code>vm_options</code> to update flavors/prices.
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card h-100">
+      <div class="card-header fw-semibold"><i class="bi bi-robot"></i> Claude AI Plans (Anthropic)</div>
+      <div class="card-body p-0">
+        <table class="table table-hover mb-0 small">
+          <thead class="table-light">
+            <tr><th>Plan</th><th>$/mo</th><th>≈ €/mo</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for plan, usd, eur, note in [
+              ('Pro',     20,  18,  '5× usage vs Free'),
+              ('Max 5×',  100, 91,  '25× usage vs Free'),
+              ('Max 20×', 200, 183, '100× usage vs Free'),
+            ] %}
+            <tr {% if claude_plan == plan %}class="table-primary"{% endif %}>
+              <td><strong>{{ plan }}</strong><br><small class="text-muted">{{ note }}</small></td>
+              <td>${{ usd }}</td><td>≈ €{{ eur }}</td>
+              <td>{% if claude_plan == plan %}<span class="badge bg-primary">current</span>{% endif %}</td>
+            </tr>
+            {% endfor %}
+            <tr {% if claude_plan == 'API' %}class="table-primary"{% endif %}>
+              <td><strong>API</strong><br><small class="text-muted">Pay-per-token · Sonnet ~$3/M</small></td>
+              <td colspan="2" class="text-muted">usage-based</td>
+              <td>{% if claude_plan == 'API' %}<span class="badge bg-primary">current</span>{% endif %}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card-footer p-2">
+        <form method="post" action="{{ url_for('dashboard.set_costs') }}" class="row g-2 align-items-end">
+          <div class="col-auto">
+            <label class="form-label small mb-1">Claude plan</label>
+            <select name="claude_plan" class="form-select form-select-sm">
+              {% for p in ['Pro', 'Max 5×', 'Max 20×', 'API'] %}
+              <option value="{{ p }}" {% if claude_plan == p %}selected{% endif %}>{{ p }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-auto">
+            <label class="form-label small mb-1">Extra storage (GB)</label>
+            <input type="number" name="extra_storage_gb" class="form-control form-control-sm"
+                   style="width:80px" value="{{ extra_storage_gb }}" min="0" step="50">
+          </div>
+          <div class="col-auto">
+            <button type="submit" class="btn btn-sm btn-primary">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header fw-semibold"><i class="bi bi-lightning-charge"></i> Disk Space — Quick Wins</div>
+  <div class="card-body p-0">
+    <table class="table table-sm mb-0">
+      <thead class="table-light"><tr><th>Location</th><th>Size</th><th>Notes</th></tr></thead>
+      <tbody>
+        {% for item in disk_items %}
+        <tr>
+          <td><code class="small">{{ item.path }}</code></td>
+          <td class="text-nowrap small">{{ item.size }}</td>
+          <td class="text-muted small">{{ item.note }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if years %}
+<div class="card">
+  <div class="card-header fw-semibold"><i class="bi bi-calendar3"></i> Cost Archive</div>
+  <div class="card-body p-0">
+    {% set month_names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'] %}
+    {% for year, entries in years.items()|sort(reverse=true) %}
+    <div class="p-3 {% if not loop.last %}border-bottom{% endif %}">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <strong>{{ year }}</strong>
+        <span class="text-muted small">Annual total: <strong>€{{ "%.2f"|format(entries|sum(attribute='total')) }}</strong></span>
+      </div>
+      <table class="table table-sm mb-0 small">
+        <thead class="table-light">
+          <tr><th>Month</th><th>VM</th><th>Storage</th><th>Claude</th><th class="fw-bold">Total</th></tr>
+        </thead>
+        <tbody>
+          {% for e in entries %}
+          <tr>
+            <td>{{ month_names[e.month - 1] }}</td>
+            <td>€{{ "%.2f"|format(e.vm) }}</td>
+            <td>€{{ "%.2f"|format(e.storage) }}</td>
+            <td>€{{ "%.2f"|format(e.claude) }}</td>
+            <td class="fw-semibold">€{{ "%.2f"|format(e.total) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,15 @@
+[Unit]
+Description=Koetai Platform — FAIR SPARQL SaaS (Flask)
+After=network.target
+
+[Service]
+Type=simple
+User=debian
+WorkingDirectory=/home/debian/koetai-platform
+EnvironmentFile=/home/debian/koetai-platform/.env
+ExecStart=/home/debian/koetai-platform/venv/bin/python3 app.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

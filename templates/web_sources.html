@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% from '_ds_nav.html' import ds_nav with context %}
+{% block title %}Web Sources — {{ ds.label }}{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">My Datasets</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('datasets.view', owner_orcid=ds.orcid_id, slug=ds.slug) }}">{{ ds.label }}</a></li>
+    <li class="breadcrumb-item active">Web Sources</li>
+  </ol>
+</nav>
+
+{{ ds_nav(ds, 'web') }}
+
+<h3><i class="bi bi-globe2"></i> Web Download Sources</h3>
+<p class="text-muted">Link download pages (e.g. Orphadata, WikiPathways) to import RDF/OWL files and track updates.</p>
+
+<!-- Add source form -->
+<div class="card mb-4">
+  <div class="card-header">Add Download Page</div>
+  <div class="card-body">
+    <form method="post" action="{{ url_for('web_sources.add_source', owner_orcid=ds.orcid_id, slug=ds.slug) }}" class="row g-2">
+      <div class="col-md-6">
+        <input type="url" name="page_url" class="form-control" placeholder="https://example.org/downloads/" required>
+      </div>
+      <div class="col-md-4">
+        <input type="text" name="label" class="form-control" placeholder="Label (optional)">
+      </div>
+      <div class="col-md-2">
+        <button type="submit" class="btn btn-primary w-100">Add</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% macro _render_filelist(src_id, files) %}{% endmacro %}
+
+{% if sources %}
+{% for entry in sources %}
+{% set src = entry.src %}
+<div class="card mb-3" id="wsrc-{{ src.id }}">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>
+      <i class="bi bi-globe2"></i>
+      <a href="{{ src.page_url }}" target="_blank" class="fw-bold text-decoration-none">{{ src.label or src.page_url }}</a>
+      <span class="text-muted small ms-2">{{ src.page_url }}</span>
+    </span>
+    <div class="d-flex gap-2 align-items-center">
+      <span id="update-badge-{{ src.id }}"></span>
+      <button class="btn btn-sm btn-outline-secondary" onclick="checkUpdate({{ src.id }})"
+              id="web-check-btn-{{ src.id }}"
+              {% if src.last_checked_at %}title="Last checked: {{ src.last_checked_at }}"{% endif %}>
+        <i class="bi bi-arrow-clockwise"></i> Check updates
+      </button>
+      <form method="post" action="{{ url_for('web_sources.delete_source', owner_orcid=ds.orcid_id, slug=ds.slug, source_id=src.id) }}"
+            onsubmit="return confirm('Remove this source?')" class="mb-0">
+        <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+      </form>
+    </div>
+  </div>
+  <div class="card-body">
+    {% if src.last_imported_at %}
+    <p class="small text-muted mb-2">Last imported: {{ src.last_imported_at }}</p>
+    {% endif %}
+    {% if src.last_checked_at %}
+    <p class="small text-muted mb-2">Last scanned: {{ src.last_checked_at }}</p>
+    {% endif %}
+
+    <button class="btn btn-outline-primary btn-sm" onclick="scanFiles({{ src.id }})">
+      <i class="bi bi-search"></i> Scan for files
+    </button>
+
+    <div id="files-{{ src.id }}" class="mt-3">
+      {% if entry.files %}
+      {{ _render_filelist(src.id, entry.files) }}
+      {% endif %}
+    </div>
+    <div id="import-status-{{ src.id }}" class="mt-2"></div>
+  </div>
+</div>
+{% endfor %}
+{% else %}
+<p class="text-muted">No web sources linked yet.</p>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const OWNER = '{{ ds.orcid_id }}';
+const SLUG  = '{{ ds.slug }}';
+
+async function scanFiles(srcId) {
+  const el = document.getElementById('files-' + srcId);
+  el.innerHTML = '<div class="spinner-border spinner-border-sm"></div> Scanning page for RDF files…';
+  try {
+    const r = await fetch(`/u/${OWNER}/${SLUG}/web/${srcId}/scan`);
+    const d = await r.json();
+    if (d.error) { el.innerHTML = `<div class="alert alert-danger">${d.error}</div>`; return; }
+    renderFileList(srcId, d.files, el);
+  } catch(e) {
+    el.innerHTML = `<div class="alert alert-danger">Error: ${e}</div>`;
+  }
+}
+
+function renderFileList(srcId, files, el) {
+  if (!files.length) { el.innerHTML = '<p class="text-muted">No RDF/OWL files found on page.</p>'; return; }
+  const hasOwl = files.some(f => f.filename.match(/\.(owl|rdf)$/i));
+  let html = `<form onsubmit="importFiles(event, ${srcId})">
+    <div class="mb-2 d-flex gap-2 align-items-center flex-wrap">
+      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleAll(${srcId}, true)">Select all</button>
+      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleAll(${srcId}, false)">Deselect all</button>
+      <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-cloud-download"></i> Import selected</button>
+      ${hasOwl ? `<div class="form-check ms-2 mb-0">
+        <input class="form-check-input" type="checkbox" id="owl-cb-${srcId}">
+        <label class="form-check-label small" for="owl-cb-${srcId}">Apply OWL reasoning (.owl/.rdf)</label>
+      </div>
+      <select class="form-select form-select-sm w-auto" id="owl-regime-${srcId}">
+        <option value="OWL_RL">OWL RL</option>
+        <option value="RDFS">RDFS</option>
+        <option value="OWL_RL_Extras">OWL RL+</option>
+      </select>` : ''}
+    </div>
+    <div class="list-group" id="filelist-${srcId}">`;
+  for (const f of files) {
+    const kb       = f.content_length ? (f.content_length / 1024).toFixed(1) + ' KB' : '';
+    const lm       = f.last_modified ? `<span class="text-muted small ms-2">${f.last_modified}</span>` : '';
+    const imported = !!f.imported_at;
+    html += `<label class="list-group-item list-group-item-action d-flex align-items-center gap-2 py-2${imported ? ' list-group-item-success' : ''}">
+      <input type="checkbox" class="form-check-input file-cb-${srcId}" value="${f.id}" checked>
+      <span class="text-monospace small">${f.filename}</span>
+      ${imported ? `<i class="bi bi-check-circle-fill text-success ms-1" title="Imported ${f.imported_at}"></i>` : ''}
+      ${lm}
+      ${kb ? `<span class="badge bg-light text-dark ms-auto">${kb}</span>` : ''}
+    </label>`;
+  }
+  html += `</div></form>`;
+  el.innerHTML = html;
+}
+
+function toggleAll(srcId, checked) {
+  document.querySelectorAll(`.file-cb-${srcId}`).forEach(cb => cb.checked = checked);
+}
+
+async function importFiles(event, srcId) {
+  event.preventDefault();
+  const status  = document.getElementById('import-status-' + srcId);
+  const checked = [...document.querySelectorAll(`.file-cb-${srcId}:checked`)].map(cb => parseInt(cb.value));
+  if (!checked.length) { status.innerHTML = '<div class="alert alert-warning">No files selected.</div>'; return; }
+
+  const owlCb     = document.getElementById(`owl-cb-${srcId}`);
+  const owlRegime = document.getElementById(`owl-regime-${srcId}`);
+  const apply_owl  = owlCb?.checked || false;
+  const owl_regime = owlRegime?.value || 'OWL_RL';
+
+  status.innerHTML = `<div class="spinner-border spinner-border-sm"></div> Importing ${checked.length} file(s)${apply_owl ? ' with OWL reasoning' : ''}…`;
+  try {
+    const r = await fetch(`/u/${OWNER}/${SLUG}/web/${srcId}/import`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({file_ids: checked, apply_owl, owl_regime})
+    });
+    const d = await r.json();
+    let html = '';
+    if (d.imported?.length) html += `<div class="alert alert-success"><strong>${d.imported.length} imported:</strong><ul class="mb-0 mt-1">${d.imported.map(f => `<li><code>${f}</code></li>`).join('')}</ul></div>`;
+    if (d.errors?.length)   html += `<div class="alert alert-danger"><strong>Errors:</strong><ul class="mb-0 mt-1">${d.errors.map(e => `<li>${e}</li>`).join('')}</ul></div>`;
+    status.innerHTML = html || '<div class="alert alert-secondary">Nothing imported.</div>';
+  } catch(e) {
+    status.innerHTML = `<div class="alert alert-danger">Error: ${e}</div>`;
+  }
+}
+
+async function checkUpdate(srcId) {
+  const badge = document.getElementById('update-badge-' + srcId);
+  const btn   = document.getElementById('web-check-btn-' + srcId);
+  badge.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+  try {
+    const r = await fetch(`/u/${OWNER}/${SLUG}/web/${srcId}/check`);
+    const d = await r.json();
+    const now = new Date().toLocaleString();
+    if (btn) btn.title = `Last checked: ${now}`;
+    if (d.error) {
+      badge.innerHTML = `<span class="badge bg-danger" title="${d.error}">Error</span>`;
+    } else if (d.has_update) {
+      const names = d.updated_files.join(', ');
+      badge.innerHTML = `<span class="badge bg-warning text-dark" title="Updated: ${names}"><i class="bi bi-arrow-up-circle"></i> Update available</span>`;
+    } else {
+      badge.innerHTML = `<span class="badge bg-success"><i class="bi bi-check-circle"></i> Up to date</span>`;
+    }
+  } catch(e) {
+    badge.innerHTML = `<span class="badge bg-danger">Error</span>`;
+  }
+}
+</script>
+{% endblock %}

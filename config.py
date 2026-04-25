@@ -13,14 +13,17 @@ ORCID_AUTH_URL    = "https://orcid.org/oauth/authorize"
 ORCID_TOKEN_URL   = "https://orcid.org/oauth/token"
 ORCID_API_URL     = "https://pub.orcid.org/v3.0"
 
-QLEVER_PLATFORM_URL = os.environ.get("QLEVER_PLATFORM_URL", "http://localhost:7030")
+QLEVER_PLATFORM_URL  = os.environ.get("QLEVER_PLATFORM_URL", "http://localhost:7030")
+FUSEKI_BASE_URL      = os.environ.get("FUSEKI_BASE_URL", "http://localhost:3030")
 BASE_URL          = os.environ.get("BASE_URL", "https://koetai.semscape.org")
 UPLOAD_DIR        = Path(os.environ.get("UPLOAD_DIR", "/home/debian/koetai-platform/uploads"))
 DEPLOY_DIR        = Path(os.environ.get("DEPLOY_DIR", "/home/debian/qlever-sparql-deployment"))
 RUDOF_BIN         = os.environ.get("RUDOF_BIN", "/usr/bin/rudof")
+JENA_BIN          = os.environ.get("JENA_BIN", "/home/debian/apache-jena-6.0.0/bin")
 SHEXER_VENV       = os.environ.get("SHEXER_VENV", "/home/debian/koetai-admin/venv/bin/python3")
 DB_PATH           = Path(__file__).parent / "db" / "koetai.db"
 GITHUB_TOKEN      = os.environ.get("GITHUB_TOKEN", "")
+GITLAB_TOKEN      = os.environ.get("GITLAB_TOKEN", "")
 GITHUB_ORG        = os.environ.get("GITHUB_ORG", "Koetai")
 SPARQL_EXAMPLES_REPO = os.environ.get("SPARQL_EXAMPLES_REPO", "sparql-examples")
 
