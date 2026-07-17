@@ -42,12 +42,29 @@
               <strong>QLever</strong> <span class="text-muted small">— optimised for very large read-mostly datasets</span>
             </label>
           </div>
-          <div class="form-check">
+          <div class="form-check mb-1">
             <input class="form-check-input" type="radio" name="platform" id="platformFuseki" value="fuseki">
             <label class="form-check-label" for="platformFuseki">
               <strong>Fuseki / Jena</strong> <span class="text-muted small">— updateable, native ShEx support, OWL reasoning</span>
             </label>
           </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="platform" id="platformComunica" value="comunica">
+            <label class="form-check-label" for="platformComunica">
+              <strong>Federation (Comunica)</strong> <span class="text-muted small">— no upload; queries live across external sources</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Federation sources — only relevant for Comunica -->
+      <div class="mb-3 d-none" id="sourcesBlock">
+        <label class="form-label fw-semibold">Federation sources <span class="text-danger">*</span></label>
+        <textarea name="sources" class="form-control" rows="4"
+                  placeholder="https://query.wikidata.org/sparql&#10;https://sparql.uniprot.org/sparql"></textarea>
+        <div class="form-text">
+          One source per line — SPARQL endpoints, RDF file URLs, or TPF interfaces.
+          A federation dataset stores no data of its own; every query runs live across these.
         </div>
       </div>
       <div class="mb-3 form-check">
@@ -118,5 +135,15 @@ slugInput.addEventListener('input', () => {
   slugPrev.textContent = slugInput.value || 'slug';
   slugInput.classList.toggle('is-invalid', !/^[a-z0-9\-]+$/.test(slugInput.value) && slugInput.value.length > 0);
 });
+
+// Show the sources field only for a federation (Comunica) dataset.
+const sourcesBlock = document.getElementById('sourcesBlock');
+function syncPlatform() {
+  const isFed = document.getElementById('platformComunica').checked;
+  sourcesBlock.classList.toggle('d-none', !isFed);
+  sourcesBlock.querySelector('textarea').required = isFed;
+}
+document.querySelectorAll('input[name="platform"]').forEach(r => r.addEventListener('change', syncPlatform));
+syncPlatform();
 </script>
 {% endblock %}

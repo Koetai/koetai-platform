@@ -8,6 +8,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required, current_user
 import config
 from services.db import get_db
+from services import triplestore
 
 _COSTS_FILE = Path(__file__).parent.parent / "costs_config.json"
 _CLAUDE_EUR  = {'Pro': 18, 'Max 5×': 91, 'Max 20×': 183, 'API': 0}
@@ -81,12 +82,23 @@ def new_dataset():
         description = request.form.get("description", "").strip()
         is_public   = 1 if request.form.get("is_public") else 0
         platform    = request.form.get("platform", "qlever")
-        if platform not in ("qlever", "fuseki"):
+        if platform not in triplestore.SUPPORTED:
             platform = "qlever"
 
         if not label or not slug:
             flash("Label and slug are required.", "error")
             return render_template("dataset_new.html")
+
+        # A federation dataset is defined by its sources, not an upload.
+        sources = None
+        if platform == "comunica":
+            sources = "\n".join(
+                line.strip() for line in request.form.get("sources", "").splitlines()
+                if line.strip()
+            )
+            if not sources:
+                flash("A federation dataset needs at least one source.", "error")
+                return render_template("dataset_new.html")
 
         fdp_keywords = request.form.get("fdp_keywords", "").strip()
         fdp_theme    = request.form.get("fdp_theme", "").strip()
@@ -97,9 +109,9 @@ def new_dataset():
         db = get_db()
         try:
             db.execute(
-                "INSERT INTO datasets (user_id, slug, label, description, graph_base, platform, is_public, "
-                "fdp_keywords, fdp_theme, fdp_license, fdp_version) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                (current_user.id, slug, label, description, graph_base, platform, is_public,
+                "INSERT INTO datasets (user_id, slug, label, description, graph_base, platform, sources, "
+                "is_public, fdp_keywords, fdp_theme, fdp_license, fdp_version) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                (current_user.id, slug, label, description, graph_base, platform, sources, is_public,
                  fdp_keywords, fdp_theme, fdp_license, fdp_version)
             )
             db.commit()

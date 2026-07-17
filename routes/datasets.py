@@ -75,6 +75,14 @@ def view(owner_orcid=None, slug=None):
                            source_counts={"git": git_count, "web": web_count})
 
 
+def _is_federation(ds):
+    """A federation (Comunica) dataset is virtual — it has no store to load into."""
+    try:
+        return ds["platform"] == "comunica"
+    except (KeyError, IndexError, TypeError):
+        return False
+
+
 @bp.route("/<owner_orcid>/<slug>/upload", methods=["GET"])
 @login_required
 def upload_page(owner_orcid, slug):
@@ -82,6 +90,9 @@ def upload_page(owner_orcid, slug):
     if not ds or ds["user_id"] != current_user.id:
         flash("Not found or not authorized.", "error")
         return redirect(url_for("dashboard.index"))
+    if _is_federation(ds):
+        flash("Federation datasets query external sources and cannot be uploaded to.", "info")
+        return redirect(url_for("datasets.view", owner_orcid=owner_orcid, slug=slug))
     return render_template("upload.html", ds=ds)
 
 
@@ -206,6 +217,10 @@ def upload(owner_orcid, slug):
     ds = _get_dataset_or_404(owner_orcid, slug)
     if not ds or ds["user_id"] != current_user.id:
         return jsonify({"error": "Not found or not authorized"}), 403
+
+    if _is_federation(ds):
+        return jsonify({"error": "Federation datasets are virtual — edit their "
+                                 "sources instead of uploading."}), 400
 
     f = request.files.get("rdf_file")
     if not f:
