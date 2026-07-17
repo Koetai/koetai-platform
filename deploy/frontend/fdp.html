@@ -1,0 +1,1079 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Koetai FAIR Data Point</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg-main: #f7f6f3;
+      --bg-panel: #ffffff;
+      --accent-soft: #d4c9b8;
+      --accent-dark: #8b7355;
+      --accent-hover: #6b5844;
+      --text-main: #2f2f2f;
+      --text-muted: #6f6f6f;
+      --border-soft: #e3e3df;
+      --success-bg: #f5f2ed;
+      --error-bg: #fff5f5;
+      --green: #2d8a4e;
+      --red: #c9372c;
+      --blue: #2563eb;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+                   Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg-main);
+      color: var(--text-main);
+      line-height: 1.6;
+    }
+
+    h1, h2, h3 {
+      font-family: Georgia, "Times New Roman", serif;
+      font-weight: 500;
+    }
+
+    a { color: var(--accent-dark); text-decoration: none; }
+    a:hover { text-decoration: underline; color: var(--accent-hover); }
+
+    header {
+      padding: 2.5rem 2rem;
+      background: linear-gradient(to bottom, #f5f2ed 0%, #e8e3d9 100%);
+      border-bottom: 2px solid var(--accent-soft);
+      position: relative;
+      overflow: hidden;
+    }
+
+    header::before {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, #a39582, transparent);
+      opacity: 0.4;
+    }
+
+    .header-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    header h1 {
+      margin: 0 0 0.4rem 0;
+      font-size: 2rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      color: var(--accent-dark);
+    }
+
+    header h1::before {
+      content: "";
+      display: inline-block;
+      width: 48px; height: 48px;
+      background-image: url('koetai-icon.png');
+      background-size: contain;
+      background-repeat: no-repeat;
+      background-position: center;
+      flex-shrink: 0;
+    }
+
+    header p {
+      margin: 0;
+      color: var(--text-muted);
+      font-style: italic;
+    }
+
+    nav.breadcrumb {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 1rem 2rem 0;
+      font-size: 0.88rem;
+      color: var(--text-muted);
+    }
+    nav.breadcrumb span { cursor: pointer; color: var(--accent-dark); }
+    nav.breadcrumb span:hover { text-decoration: underline; }
+    nav.breadcrumb .sep { margin: 0 0.4rem; color: var(--border-soft); }
+
+    main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 1rem 2rem 2rem;
+    }
+
+    /* Search & Filter Bar */
+    .search-bar {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+      margin-bottom: 1.5rem;
+    }
+    .search-bar input {
+      flex: 1;
+      padding: 0.6rem 1rem;
+      font-size: 0.95rem;
+      border: 1px solid var(--border-soft);
+      border-radius: 6px;
+      background: #fff;
+      font-family: inherit;
+    }
+    .search-bar input:focus { outline: 2px solid var(--accent-dark); outline-offset: -1px; }
+
+    button {
+      padding: 0.5rem 1rem;
+      font-size: 0.88rem;
+      border: 1px solid var(--border-soft);
+      border-radius: 4px;
+      cursor: pointer;
+      background: #f5f5f5;
+      transition: background 0.15s;
+      font-family: inherit;
+    }
+    button:hover { background: #e8e8e8; }
+    .btn-primary { background: var(--accent-dark); color: #fff; border-color: var(--accent-dark); }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-sm { padding: 0.3rem 0.7rem; font-size: 0.8rem; }
+    .btn-success { background: var(--green); color: #fff; border-color: var(--green); }
+
+    /* Stats Row */
+    .stats-row {
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.5rem;
+    }
+    .stat-box {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-soft);
+      border-radius: 8px;
+      padding: 1rem 1.5rem;
+      text-align: center;
+      min-width: 140px;
+      flex: 1;
+    }
+    .stat-box .num {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--accent-dark);
+      font-family: Georgia, serif;
+    }
+    .stat-box .label {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    /* Cards Grid */
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 1rem;
+    }
+
+    .card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-soft);
+      border-radius: 8px;
+      padding: 1.25rem 1.5rem;
+      cursor: pointer;
+      transition: box-shadow 0.2s, border-color 0.2s;
+    }
+    .card:hover {
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      border-color: var(--accent-soft);
+    }
+
+    .card .card-type {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      margin-bottom: 0.3rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .card .card-type .type-icon {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+    }
+    .type-repo { background: var(--accent-dark); }
+    .type-catalog { background: var(--blue); }
+    .type-dataset { background: var(--green); }
+    .type-dist { background: #e6a817; }
+
+    .card .card-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-bottom: 0.3rem;
+      color: var(--text-main);
+    }
+
+    .card .card-desc {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+      margin-bottom: 0.6rem;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .card .card-meta {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+    .card .card-meta strong { color: var(--accent-dark); }
+
+    .card .keywords {
+      display: flex;
+      gap: 0.3rem;
+      flex-wrap: wrap;
+      margin-top: 0.4rem;
+    }
+    .card .keywords .kw {
+      font-size: 0.72rem;
+      padding: 0.15rem 0.5rem;
+      background: var(--success-bg);
+      border: 1px solid var(--border-soft);
+      border-radius: 12px;
+      color: var(--accent-dark);
+    }
+
+    /* Detail Panel */
+    .detail-panel {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-soft);
+      border-radius: 8px;
+      padding: 1.5rem 2rem;
+      margin-bottom: 1.5rem;
+    }
+    .detail-panel h2 { margin-top: 0; font-size: 1.4rem; }
+    .detail-panel .meta-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+    }
+    .detail-panel .meta-table td {
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid var(--border-soft);
+      vertical-align: top;
+    }
+    .detail-panel .meta-table td:first-child {
+      font-weight: 600;
+      color: var(--text-muted);
+      width: 160px;
+      white-space: nowrap;
+    }
+
+    .section-title {
+      font-size: 1.15rem;
+      margin: 1.5rem 0 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .section-title .count {
+      font-size: 0.78rem;
+      padding: 0.15rem 0.5rem;
+      background: var(--success-bg);
+      border-radius: 12px;
+      color: var(--accent-dark);
+    }
+
+    .muted { color: var(--text-muted); font-style: italic; }
+
+    .spinner {
+      display: inline-block;
+      width: 16px; height: 16px;
+      border: 2px solid var(--border-soft);
+      border-top-color: var(--accent-dark);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      vertical-align: middle;
+      margin-right: 0.4rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Modal */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal {
+      background: var(--bg-panel);
+      padding: 2rem;
+      border-radius: 8px;
+      max-width: 600px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    }
+    .modal h2 { margin-top: 0; }
+    .form-group { margin-bottom: 0.75rem; }
+    .form-group label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+      color: var(--text-muted);
+    }
+    .form-group input, .form-group select, .form-group textarea {
+      width: 100%;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.9rem;
+      border: 1px solid var(--border-soft);
+      border-radius: 4px;
+      background: #fff;
+      font-family: inherit;
+    }
+    .form-group textarea { min-height: 60px; resize: vertical; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+
+    /* Toast */
+    #toast-container {
+      position: fixed;
+      top: 1rem; right: 1rem;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .toast {
+      padding: 0.75rem 1.25rem;
+      border-radius: 6px;
+      font-size: 0.88rem;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+      animation: slideIn 0.3s ease;
+    }
+    .toast.success { background: #e6f9ed; color: #1a5c2e; border: 1px solid #b0e0c2; }
+    .toast.error { background: #fff0f0; color: #8a1f1f; border: 1px solid #f0c0c0; }
+    .toast.info { background: var(--success-bg); color: var(--accent-dark); border: 1px solid var(--accent-soft); }
+    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+    footer {
+      margin-top: 2rem;
+      padding: 2rem;
+      background: linear-gradient(to bottom, var(--bg-main), #ebe8e2);
+      border-top: 1px solid var(--border-soft);
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+    footer .powered-by {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 2rem;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+    footer .powered-by a {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      text-decoration: none;
+      color: var(--text-muted);
+      transition: color 0.2s;
+    }
+    footer .powered-by a:hover { color: var(--accent-dark); }
+    footer .powered-by img { height: 28px; width: auto; opacity: 0.8; }
+    footer .powered-by a:hover img { opacity: 1; }
+
+    .empty-state {
+      text-align: center;
+      padding: 3rem;
+      color: var(--text-muted);
+    }
+    .empty-state .icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      font-size: 0.88rem;
+      margin-bottom: 1rem;
+      color: var(--accent-dark);
+      cursor: pointer;
+    }
+    .back-link:hover { text-decoration: underline; }
+  </style>
+</head>
+
+<body>
+
+<header>
+  <div class="header-inner">
+    <h1>Koetai FAIR Data Point</h1>
+    <p>Biomedical knowledge graph metadata catalog &mdash; browse, search, and register FAIR datasets</p>
+  </div>
+</header>
+
+<nav class="breadcrumb" id="breadcrumb"></nav>
+
+<main>
+  <!-- Search -->
+  <div class="search-bar">
+    <input type="text" id="search-input" placeholder="Search datasets, catalogs, and distributions..." oninput="onSearch()">
+    <button class="btn-primary" onclick="showAddModal()">+ Register</button>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row" id="stats-row">
+    <div class="stat-box"><div class="num" id="stat-repos">-</div><div class="label">Repositories</div></div>
+    <div class="stat-box"><div class="num" id="stat-catalogs">-</div><div class="label">Catalogs</div></div>
+    <div class="stat-box"><div class="num" id="stat-datasets">-</div><div class="label">Datasets</div></div>
+    <div class="stat-box"><div class="num" id="stat-dists">-</div><div class="label">Distributions</div></div>
+  </div>
+
+  <!-- Content Area -->
+  <div id="content">
+    <div class="muted"><span class="spinner"></span> Loading FAIR Data Point metadata...</div>
+  </div>
+</main>
+
+<!-- Add/Register Modal -->
+<div class="modal-overlay" id="add-modal">
+  <div class="modal">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+      <h2 id="add-modal-title" style="margin:0;">Register New Entry</h2>
+      <button class="btn-sm" onclick="closeAddModal()">Close</button>
+    </div>
+
+    <div class="form-group">
+      <label>Type</label>
+      <select id="add-type" onchange="onAddTypeChange()">
+        <option value="catalog">Catalog</option>
+        <option value="dataset">Dataset</option>
+        <option value="distribution">Distribution</option>
+        <option value="harvest">Import from external FDP URL</option>
+      </select>
+    </div>
+
+    <div id="add-form-fields">
+      <div class="form-group">
+        <label>Title</label>
+        <input type="text" id="add-title" placeholder="e.g. Rare Disease Ontologies">
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <textarea id="add-desc" placeholder="Describe this entry..."></textarea>
+      </div>
+      <div class="form-group" id="add-parent-group">
+        <label id="add-parent-label">Parent Repository</label>
+        <select id="add-parent"></select>
+      </div>
+      <div class="form-group" id="add-keywords-group" style="display:none;">
+        <label>Keywords (comma-separated)</label>
+        <input type="text" id="add-keywords" placeholder="e.g. rare diseases, ontology, clinical">
+      </div>
+      <div class="form-group" id="add-version-group" style="display:none;">
+        <label>Version</label>
+        <input type="text" id="add-version" value="1.0">
+      </div>
+      <div id="add-dist-fields" style="display:none;">
+        <div class="form-group">
+          <label>Access URL (SPARQL endpoint or landing page)</label>
+          <input type="text" id="add-access-url" placeholder="https://...">
+        </div>
+        <div class="form-group">
+          <label>Download URL (direct file download, optional)</label>
+          <input type="text" id="add-download-url" placeholder="https://...">
+        </div>
+        <div class="form-group">
+          <label>Media Type</label>
+          <input type="text" id="add-media-type" value="application/sparql-results+json">
+        </div>
+      </div>
+    </div>
+
+    <div id="add-harvest-fields" style="display:none;">
+      <div class="form-group">
+        <label>FDP URL (root metadata URL returning Turtle/JSON-LD)</label>
+        <input type="text" id="harvest-url" placeholder="https://fdp.example.org/">
+      </div>
+    </div>
+
+    <button class="btn-primary" id="add-submit-btn" onclick="submitAdd()" style="margin-top:0.5rem;">Add Entry</button>
+    <div id="add-status" style="margin-top:0.5rem; font-size:0.85rem;"></div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<footer>
+  <div class="powered-by">
+    <a href="https://sparql.semscape.org/" target="_blank" rel="noopener">
+      <img src="koetai-icon.png" alt="Koetai" onerror="this.style.display='none'">
+      <span>Koetai</span>
+    </a>
+    <a href="https://github.com/ad-freiburg/qlever" target="_blank" rel="noopener">
+      <img src="https://raw.githubusercontent.com/ad-freiburg/qlever/master/docs/images/qlever-logo.png"
+           alt="QLever" onerror="this.style.display='none'">
+      <span>QLever</span>
+    </a>
+    <a href="https://www.fairdatapoint.org/" target="_blank" rel="noopener">
+      <span>FAIR Data Point</span>
+    </a>
+  </div>
+  <div>Part of the <strong>Koetai RDF Framework</strong> &mdash; <a href="admin.html">Admin</a></div>
+</footer>
+
+<script>
+
+var SPARQL_EP = '/endpoint-fdp';
+var ADMIN_API = '/admin-api';
+
+// All FDP data loaded from SPARQL
+var fdpData = { repos: [], catalogs: [], datasets: [], distributions: [] };
+
+// Navigation state
+var currentView = 'home'; // home, repo, catalog, dataset
+var currentUri = null;
+var searchTerm = '';
+
+// ── SPARQL Helpers ──
+
+async function sparql(query) {
+  try {
+    var r = await fetch(SPARQL_EP, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/sparql-results+json' },
+      body: 'query=' + encodeURIComponent(query)
+    });
+    var d = await r.json();
+    return d.results ? d.results.bindings : [];
+  } catch (e) {
+    toast('SPARQL error: ' + e.message, 'error');
+    return [];
+  }
+}
+
+function val(binding, key) {
+  return binding[key] ? binding[key].value : '';
+}
+
+// ── Load all FDP data ──
+
+async function loadAll() {
+  // Repositories
+  var rows = await sparql(
+    'PREFIX r3d: <http://www.re3data.org/schema/3-0#> ' +
+    'PREFIX dct: <http://purl.org/dc/terms/> ' +
+    'PREFIX fdp: <http://rdf.biosemantics.org/ontologies/fdp-o#> ' +
+    'SELECT ?uri ?title ?desc ?version ?modified (COUNT(DISTINCT ?cat) AS ?catCount) WHERE { ' +
+    '  ?uri a r3d:Repository . ' +
+    '  OPTIONAL { ?uri dct:title ?title } ' +
+    '  OPTIONAL { ?uri dct:description ?desc } ' +
+    '  OPTIONAL { ?uri dct:hasVersion ?version } ' +
+    '  OPTIONAL { ?uri fdp:metadataModified ?modified } ' +
+    '  OPTIONAL { ?uri r3d:dataCatalog ?cat } ' +
+    '} GROUP BY ?uri ?title ?desc ?version ?modified'
+  );
+  fdpData.repos = rows.map(function(r) {
+    return { uri: val(r,'uri'), title: val(r,'title'), desc: val(r,'desc'),
+             version: val(r,'version'), modified: val(r,'modified'), catCount: parseInt(val(r,'catCount')) || 0 };
+  });
+
+  // Catalogs
+  rows = await sparql(
+    'PREFIX dcat: <http://www.w3.org/ns/dcat#> ' +
+    'PREFIX dct: <http://purl.org/dc/terms/> ' +
+    'PREFIX fdp: <http://rdf.biosemantics.org/ontologies/fdp-o#> ' +
+    'SELECT ?uri ?title ?desc ?parent ?modified (COUNT(DISTINCT ?ds) AS ?dsCount) WHERE { ' +
+    '  ?uri a dcat:Catalog . ' +
+    '  OPTIONAL { ?uri dct:title ?title } ' +
+    '  OPTIONAL { ?uri dct:description ?desc } ' +
+    '  OPTIONAL { ?uri dct:isPartOf ?parent } ' +
+    '  OPTIONAL { ?uri fdp:metadataModified ?modified } ' +
+    '  OPTIONAL { ?uri dcat:dataset ?ds } ' +
+    '} GROUP BY ?uri ?title ?desc ?parent ?modified'
+  );
+  fdpData.catalogs = rows.map(function(r) {
+    return { uri: val(r,'uri'), title: val(r,'title'), desc: val(r,'desc'),
+             parent: val(r,'parent'), modified: val(r,'modified'), dsCount: parseInt(val(r,'dsCount')) || 0 };
+  });
+
+  // Datasets
+  rows = await sparql(
+    'PREFIX dcat: <http://www.w3.org/ns/dcat#> ' +
+    'PREFIX dct: <http://purl.org/dc/terms/> ' +
+    'PREFIX fdp: <http://rdf.biosemantics.org/ontologies/fdp-o#> ' +
+    'SELECT ?uri ?title ?desc ?parent ?version ?license ?modified (COUNT(DISTINCT ?dist) AS ?distCount) ' +
+    '(GROUP_CONCAT(DISTINCT ?kw; SEPARATOR="|||") AS ?keywords) WHERE { ' +
+    '  ?uri a dcat:Dataset . ' +
+    '  OPTIONAL { ?uri dct:title ?title } ' +
+    '  OPTIONAL { ?uri dct:description ?desc } ' +
+    '  OPTIONAL { ?uri dct:isPartOf ?parent } ' +
+    '  OPTIONAL { ?uri dct:hasVersion ?version } ' +
+    '  OPTIONAL { ?uri dct:license ?license } ' +
+    '  OPTIONAL { ?uri fdp:metadataModified ?modified } ' +
+    '  OPTIONAL { ?uri dcat:distribution ?dist } ' +
+    '  OPTIONAL { ?uri dcat:keyword ?kw } ' +
+    '} GROUP BY ?uri ?title ?desc ?parent ?version ?license ?modified'
+  );
+  fdpData.datasets = rows.map(function(r) {
+    var kws = val(r,'keywords') ? val(r,'keywords').split('|||').filter(Boolean) : [];
+    return { uri: val(r,'uri'), title: val(r,'title'), desc: val(r,'desc'),
+             parent: val(r,'parent'), version: val(r,'version'), license: val(r,'license'),
+             modified: val(r,'modified'), distCount: parseInt(val(r,'distCount')) || 0, keywords: kws };
+  });
+
+  // Distributions
+  rows = await sparql(
+    'PREFIX dcat: <http://www.w3.org/ns/dcat#> ' +
+    'PREFIX dct: <http://purl.org/dc/terms/> ' +
+    'SELECT ?uri ?title ?desc ?parent ?accessURL ?downloadURL ?mediaType ?license WHERE { ' +
+    '  ?uri a dcat:Distribution . ' +
+    '  OPTIONAL { ?uri dct:title ?title } ' +
+    '  OPTIONAL { ?uri dct:description ?desc } ' +
+    '  OPTIONAL { ?uri dct:isPartOf ?parent } ' +
+    '  OPTIONAL { ?uri dcat:accessURL ?accessURL } ' +
+    '  OPTIONAL { ?uri dcat:downloadURL ?downloadURL } ' +
+    '  OPTIONAL { ?uri dcat:mediaType ?mediaType } ' +
+    '  OPTIONAL { ?uri dct:license ?license } ' +
+    '}'
+  );
+  fdpData.distributions = rows.map(function(r) {
+    return { uri: val(r,'uri'), title: val(r,'title'), desc: val(r,'desc'),
+             parent: val(r,'parent'), accessURL: val(r,'accessURL'), downloadURL: val(r,'downloadURL'),
+             mediaType: val(r,'mediaType'), license: val(r,'license') };
+  });
+
+  updateStats();
+  render();
+}
+
+// ── Stats ──
+
+function updateStats() {
+  document.getElementById('stat-repos').textContent = fdpData.repos.length;
+  document.getElementById('stat-catalogs').textContent = fdpData.catalogs.length;
+  document.getElementById('stat-datasets').textContent = fdpData.datasets.length;
+  document.getElementById('stat-dists').textContent = fdpData.distributions.length;
+}
+
+// ── Rendering ──
+
+function render() {
+  updateBreadcrumb();
+  var el = document.getElementById('content');
+
+  if (currentView === 'home') renderHome(el);
+  else if (currentView === 'repo') renderRepo(el);
+  else if (currentView === 'catalog') renderCatalog(el);
+  else if (currentView === 'dataset') renderDataset(el);
+}
+
+function renderHome(el) {
+  var items = [];
+  // Show repos
+  fdpData.repos.forEach(function(r) {
+    if (matchSearch(r.title + ' ' + r.desc)) {
+      items.push(repoCard(r));
+    }
+  });
+  // Also show catalogs at top level
+  fdpData.catalogs.forEach(function(c) {
+    if (matchSearch(c.title + ' ' + c.desc)) {
+      items.push(catalogCard(c));
+    }
+  });
+  // Also show matching datasets
+  fdpData.datasets.forEach(function(d) {
+    if (searchTerm && matchSearch(d.title + ' ' + d.desc + ' ' + d.keywords.join(' '))) {
+      items.push(datasetCard(d));
+    }
+  });
+
+  if (items.length === 0) {
+    el.innerHTML = '<div class="empty-state"><div class="icon">&#128218;</div><div>No FAIR Data Point entries found.</div></div>';
+    return;
+  }
+  el.innerHTML = '<div class="cards-grid">' + items.join('') + '</div>';
+}
+
+function renderRepo(el) {
+  var repo = fdpData.repos.find(function(r) { return r.uri === currentUri; });
+  if (!repo) { navigateTo('home'); return; }
+
+  var cats = fdpData.catalogs.filter(function(c) { return c.parent === repo.uri; });
+  var html = detailPanel(repo, 'Repository', [
+    ['Version', repo.version],
+    ['Last modified', fmtDate(repo.modified)],
+    ['Catalogs', cats.length]
+  ]);
+
+  html += '<h3 class="section-title">Catalogs <span class="count">' + cats.length + '</span></h3>';
+  if (cats.length) {
+    html += '<div class="cards-grid">';
+    cats.forEach(function(c) { html += catalogCard(c); });
+    html += '</div>';
+  } else {
+    html += '<div class="muted">No catalogs registered yet.</div>';
+  }
+  el.innerHTML = html;
+}
+
+function renderCatalog(el) {
+  var cat = fdpData.catalogs.find(function(c) { return c.uri === currentUri; });
+  if (!cat) { navigateTo('home'); return; }
+
+  var datasets = fdpData.datasets.filter(function(d) { return d.parent === cat.uri; });
+  var html = detailPanel(cat, 'Catalog', [
+    ['Last modified', fmtDate(cat.modified)],
+    ['Datasets', datasets.length]
+  ]);
+
+  html += '<h3 class="section-title">Datasets <span class="count">' + datasets.length + '</span></h3>';
+  if (datasets.length) {
+    html += '<div class="cards-grid">';
+    datasets.forEach(function(d) {
+      if (matchSearch(d.title + ' ' + d.desc + ' ' + d.keywords.join(' '))) {
+        html += datasetCard(d);
+      }
+    });
+    html += '</div>';
+  } else {
+    html += '<div class="muted">No datasets registered yet.</div>';
+  }
+  el.innerHTML = html;
+}
+
+function renderDataset(el) {
+  var ds = fdpData.datasets.find(function(d) { return d.uri === currentUri; });
+  if (!ds) { navigateTo('home'); return; }
+
+  var dists = fdpData.distributions.filter(function(d) { return d.parent === ds.uri; });
+  var kws = ds.keywords.length ? ds.keywords.map(function(k) { return '<span class="kw">' + esc(k) + '</span>'; }).join(' ') : '<span class="muted">none</span>';
+
+  var html = detailPanel(ds, 'Dataset', [
+    ['Version', ds.version],
+    ['License', ds.license ? '<a href="' + esc(ds.license) + '" target="_blank">' + shortenUri(ds.license) + '</a>' : ''],
+    ['Last modified', fmtDate(ds.modified)],
+    ['Keywords', kws],
+    ['Distributions', dists.length]
+  ]);
+
+  html += '<h3 class="section-title">Distributions <span class="count">' + dists.length + '</span></h3>';
+  if (dists.length) {
+    html += '<div class="cards-grid">';
+    dists.forEach(function(d) { html += distCard(d); });
+    html += '</div>';
+  } else {
+    html += '<div class="muted">No distributions registered yet.</div>';
+  }
+  el.innerHTML = html;
+}
+
+// ── Card Generators ──
+
+function repoCard(r) {
+  return '<div class="card" onclick="navigateTo(\'repo\',\'' + escAttr(r.uri) + '\')">'
+    + '<div class="card-type"><span class="type-icon type-repo"></span> Repository</div>'
+    + '<div class="card-title">' + esc(r.title || 'Untitled') + '</div>'
+    + '<div class="card-desc">' + esc(r.desc || '') + '</div>'
+    + '<div class="card-meta">'
+    + '<span>Catalogs: <strong>' + r.catCount + '</strong></span>'
+    + (r.version ? '<span>v' + esc(r.version) + '</span>' : '')
+    + (r.modified ? '<span>' + fmtDate(r.modified) + '</span>' : '')
+    + '</div></div>';
+}
+
+function catalogCard(c) {
+  return '<div class="card" onclick="navigateTo(\'catalog\',\'' + escAttr(c.uri) + '\')">'
+    + '<div class="card-type"><span class="type-icon type-catalog"></span> Catalog</div>'
+    + '<div class="card-title">' + esc(c.title || 'Untitled') + '</div>'
+    + '<div class="card-desc">' + esc(c.desc || '') + '</div>'
+    + '<div class="card-meta">'
+    + '<span>Datasets: <strong>' + c.dsCount + '</strong></span>'
+    + (c.modified ? '<span>' + fmtDate(c.modified) + '</span>' : '')
+    + '</div></div>';
+}
+
+function datasetCard(d) {
+  return '<div class="card" onclick="navigateTo(\'dataset\',\'' + escAttr(d.uri) + '\')">'
+    + '<div class="card-type"><span class="type-icon type-dataset"></span> Dataset</div>'
+    + '<div class="card-title">' + esc(d.title || 'Untitled') + '</div>'
+    + '<div class="card-desc">' + esc(d.desc || '') + '</div>'
+    + '<div class="card-meta">'
+    + '<span>Distributions: <strong>' + d.distCount + '</strong></span>'
+    + (d.version ? '<span>v' + esc(d.version) + '</span>' : '')
+    + '</div>'
+    + (d.keywords.length ? '<div class="keywords">' + d.keywords.slice(0,5).map(function(k) { return '<span class="kw">' + esc(k) + '</span>'; }).join('') + '</div>' : '')
+    + '</div>';
+}
+
+function distCard(d) {
+  var url = d.accessURL || d.downloadURL;
+  return '<div class="card" style="cursor:default;">'
+    + '<div class="card-type"><span class="type-icon type-dist"></span> Distribution</div>'
+    + '<div class="card-title">' + esc(d.title || 'Untitled') + '</div>'
+    + '<div class="card-desc">' + esc(d.desc || '') + '</div>'
+    + '<div class="card-meta">'
+    + (d.mediaType ? '<span>Type: <strong>' + esc(d.mediaType) + '</strong></span>' : '')
+    + (d.license ? '<span>License: <a href="' + esc(d.license) + '" target="_blank">' + shortenUri(d.license) + '</a></span>' : '')
+    + '</div>'
+    + (url ? '<div style="margin-top:0.5rem;"><a href="' + esc(url) + '" target="_blank" class="btn-sm btn-primary" style="text-decoration:none; display:inline-block;">' + (d.downloadURL ? 'Download' : 'Access') + '</a></div>' : '')
+    + '</div>';
+}
+
+function detailPanel(item, typeName, fields) {
+  var html = '<div class="detail-panel">';
+  html += '<div style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted); margin-bottom:0.3rem;">' + typeName + '</div>';
+  html += '<h2>' + esc(item.title || 'Untitled') + '</h2>';
+  if (item.desc) html += '<p style="color:var(--text-muted); margin-top:-0.5rem;">' + esc(item.desc) + '</p>';
+  html += '<table class="meta-table">';
+  html += '<tr><td>URI</td><td><a href="' + esc(item.uri) + '" target="_blank" style="font-size:0.82rem; word-break:break-all;">' + esc(item.uri) + '</a></td></tr>';
+  fields.forEach(function(f) {
+    if (f[1]) html += '<tr><td>' + f[0] + '</td><td>' + f[1] + '</td></tr>';
+  });
+  html += '</table></div>';
+  return html;
+}
+
+// ── Navigation ──
+
+function navigateTo(view, uri) {
+  currentView = view;
+  currentUri = uri || null;
+  render();
+  window.scrollTo(0, 0);
+}
+
+function updateBreadcrumb() {
+  var bc = document.getElementById('breadcrumb');
+  var parts = ['<span onclick="navigateTo(\'home\')">FDP Index</span>'];
+
+  if (currentView === 'repo' || currentView === 'catalog' || currentView === 'dataset') {
+    // Find ancestors
+    if (currentView === 'dataset') {
+      var ds = fdpData.datasets.find(function(d) { return d.uri === currentUri; });
+      if (ds && ds.parent) {
+        var cat = fdpData.catalogs.find(function(c) { return c.uri === ds.parent; });
+        if (cat) {
+          if (cat.parent) {
+            var repo = fdpData.repos.find(function(r) { return r.uri === cat.parent; });
+            if (repo) parts.push('<span onclick="navigateTo(\'repo\',\'' + escAttr(repo.uri) + '\')">' + esc(repo.title || 'Repository') + '</span>');
+          }
+          parts.push('<span onclick="navigateTo(\'catalog\',\'' + escAttr(cat.uri) + '\')">' + esc(cat.title || 'Catalog') + '</span>');
+        }
+      }
+      parts.push('<span>' + esc(ds ? ds.title : '') + '</span>');
+    } else if (currentView === 'catalog') {
+      var cat = fdpData.catalogs.find(function(c) { return c.uri === currentUri; });
+      if (cat && cat.parent) {
+        var repo = fdpData.repos.find(function(r) { return r.uri === cat.parent; });
+        if (repo) parts.push('<span onclick="navigateTo(\'repo\',\'' + escAttr(repo.uri) + '\')">' + esc(repo.title || 'Repository') + '</span>');
+      }
+      parts.push('<span>' + esc(cat ? cat.title : '') + '</span>');
+    } else if (currentView === 'repo') {
+      var repo = fdpData.repos.find(function(r) { return r.uri === currentUri; });
+      parts.push('<span>' + esc(repo ? repo.title : '') + '</span>');
+    }
+  }
+
+  bc.innerHTML = parts.join('<span class="sep">/</span>');
+}
+
+// ── Search ──
+
+function onSearch() {
+  searchTerm = document.getElementById('search-input').value.trim().toLowerCase();
+  render();
+}
+
+function matchSearch(text) {
+  if (!searchTerm) return true;
+  return text.toLowerCase().indexOf(searchTerm) !== -1;
+}
+
+// ── Add/Register Modal ──
+
+function showAddModal() {
+  document.getElementById('add-modal').classList.add('active');
+  onAddTypeChange();
+  populateParentSelects();
+}
+
+function closeAddModal() {
+  document.getElementById('add-modal').classList.remove('active');
+  document.getElementById('add-status').innerHTML = '';
+}
+
+function onAddTypeChange() {
+  var type = document.getElementById('add-type').value;
+  var isHarvest = type === 'harvest';
+  document.getElementById('add-form-fields').style.display = isHarvest ? 'none' : 'block';
+  document.getElementById('add-harvest-fields').style.display = isHarvest ? 'block' : 'none';
+  document.getElementById('add-submit-btn').textContent = isHarvest ? 'Import' : 'Add Entry';
+  document.getElementById('add-keywords-group').style.display = type === 'dataset' ? 'block' : 'none';
+  document.getElementById('add-version-group').style.display = (type === 'dataset') ? 'block' : 'none';
+  document.getElementById('add-dist-fields').style.display = type === 'distribution' ? 'block' : 'none';
+
+  var parentLabel = document.getElementById('add-parent-label');
+  if (type === 'catalog') parentLabel.textContent = 'Parent Repository';
+  else if (type === 'dataset') parentLabel.textContent = 'Parent Catalog';
+  else if (type === 'distribution') parentLabel.textContent = 'Parent Dataset';
+}
+
+function populateParentSelects() {
+  var type = document.getElementById('add-type').value;
+  var sel = document.getElementById('add-parent');
+  sel.innerHTML = '<option value="">-- None --</option>';
+
+  var items = [];
+  if (type === 'catalog') items = fdpData.repos;
+  else if (type === 'dataset') items = fdpData.catalogs;
+  else if (type === 'distribution') items = fdpData.datasets;
+
+  items.forEach(function(i) {
+    sel.innerHTML += '<option value="' + escAttr(i.uri) + '">' + esc(i.title || i.uri) + '</option>';
+  });
+}
+
+async function submitAdd() {
+  var type = document.getElementById('add-type').value;
+  var status = document.getElementById('add-status');
+  status.innerHTML = '<span class="spinner"></span> Processing...';
+
+  if (type === 'harvest') {
+    var url = document.getElementById('harvest-url').value.trim();
+    if (!url) { status.innerHTML = '<span style="color:var(--red);">URL is required</span>'; return; }
+    var r = await adminApi('/fdp/harvest', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ url: url }) });
+    if (r && r.ok) {
+      toast('Imported metadata from ' + url, 'success');
+      closeAddModal();
+      await loadAll();
+    } else {
+      status.innerHTML = '<span style="color:var(--red);">' + esc(r ? r.error : 'Failed') + '</span>';
+    }
+    return;
+  }
+
+  var title = document.getElementById('add-title').value.trim();
+  if (!title) { status.innerHTML = '<span style="color:var(--red);">Title is required</span>'; return; }
+
+  var body = {
+    title: title,
+    description: document.getElementById('add-desc').value.trim(),
+    parent_uri: document.getElementById('add-parent').value
+  };
+
+  var endpoint;
+  if (type === 'catalog') {
+    endpoint = '/fdp/catalogs';
+  } else if (type === 'dataset') {
+    endpoint = '/fdp/datasets';
+    body.keywords = document.getElementById('add-keywords').value.split(',').map(function(k) { return k.trim(); }).filter(Boolean);
+    body.version = document.getElementById('add-version').value.trim() || '1.0';
+  } else if (type === 'distribution') {
+    endpoint = '/fdp/distributions';
+    body.access_url = document.getElementById('add-access-url').value.trim();
+    body.download_url = document.getElementById('add-download-url').value.trim();
+    body.media_type = document.getElementById('add-media-type').value.trim();
+  }
+
+  var r = await adminApi(endpoint, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body)
+  });
+
+  if (r && r.ok) {
+    toast(type + ' "' + title + '" added', 'success');
+    closeAddModal();
+    await loadAll();
+  } else {
+    status.innerHTML = '<span style="color:var(--red);">' + esc(r ? r.error : 'Failed') + '</span>';
+  }
+}
+
+// ── API ──
+
+async function adminApi(path, opts) {
+  try {
+    var r = await fetch(ADMIN_API + path, opts);
+    return await r.json();
+  } catch (e) {
+    toast('API error: ' + e.message, 'error');
+    return null;
+  }
+}
+
+// ── Helpers ──
+
+function esc(t) {
+  var d = document.createElement('div');
+  d.textContent = t || '';
+  return d.innerHTML;
+}
+
+function escAttr(t) {
+  return (t || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
+
+function fmtDate(iso) {
+  if (!iso) return '';
+  try {
+    var d = new Date(iso);
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  } catch (e) { return iso; }
+}
+
+function shortenUri(uri) {
+  if (!uri) return '';
+  var prefixes = {
+    'https://creativecommons.org/licenses/': 'CC ',
+    'http://creativecommons.org/licenses/': 'CC ',
+    'http://www.w3.org/ns/dcat#': 'dcat:',
+    'http://purl.org/dc/terms/': 'dct:',
+    'http://xmlns.com/foaf/0.1/': 'foaf:',
+  };
+  for (var p in prefixes) {
+    if (uri.indexOf(p) === 0) return prefixes[p] + uri.substring(p.length);
+  }
+  var idx = Math.max(uri.lastIndexOf('#'), uri.lastIndexOf('/'));
+  if (idx > 0 && idx < uri.length - 1) return uri.substring(idx + 1);
+  return uri;
+}
+
+function toast(msg, type) {
+  type = type || 'info';
+  var c = document.getElementById('toast-container');
+  var t = document.createElement('div');
+  t.className = 'toast ' + type;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(function() { t.remove(); }, 5000);
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeAddModal();
+});
+
+// ── Init ──
+document.addEventListener('DOMContentLoaded', loadAll);
+
+</script>
+
+</body>
+</html>

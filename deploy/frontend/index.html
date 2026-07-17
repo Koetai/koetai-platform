@@ -1,0 +1,634 @@
+<!doctype html>
+<html lang="en" data-theme="koetai">
+<head>
+  <meta charset="utf-8" />
+  <title>Koetai FAIR Data Explorer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script>
+    (function(){
+      var t = localStorage.getItem('koetai-theme') || 'koetai';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+  <style>
+    /* === THEMES === */
+    [data-theme="koetai"] {
+      --bg-main: #f7f6f3;
+      --bg-panel: #ffffff;
+      --accent-soft: #d4c9b8;
+      --accent-dark: #8b7355;
+      --accent-hover: #6b5844;
+      --text-main: #2f2f2f;
+      --text-muted: #6f6f6f;
+      --border-soft: #e3e3df;
+      --success-bg: #f5f2ed;
+      --header-bg: linear-gradient(to bottom, #f5f2ed 0%, #e8e3d9 100%);
+      --header-border: 2px solid #d4c9b8;
+      --header-text: #8b7355;
+      --header-muted: #6f6f6f;
+      --header-stripe: linear-gradient(90deg, transparent, #a39582, transparent);
+      --card-shadow: rgba(139, 115, 85, 0.08);
+      --fair-bg: linear-gradient(to bottom, #faf8f5, #f5f2ed);
+      --footer-end: #ebe8e2;
+      --switcher-border: rgba(139, 115, 85, 0.3);
+      --switcher-active: #8b7355;
+    }
+
+    [data-theme="ahri"] {
+      --bg-main: #f4f7f6;
+      --bg-panel: #ffffff;
+      --accent-soft: #b8d4c8;
+      --accent-dark: #1a6b4a;
+      --accent-hover: #145438;
+      --text-main: #2f2f2f;
+      --text-muted: #6f6f6f;
+      --border-soft: #d4e8df;
+      --success-bg: #f0f7f4;
+      --header-bg: linear-gradient(to bottom, #1a6b4a 0%, #145438 100%);
+      --header-border: 2px solid #1a6b4a;
+      --header-text: #ffffff;
+      --header-muted: rgba(255, 255, 255, 0.8);
+      --header-stripe: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+      --card-shadow: rgba(26, 107, 74, 0.08);
+      --fair-bg: linear-gradient(to bottom, #f0f7f4, #e8f3ef);
+      --footer-end: #dbe8e4;
+      --switcher-border: rgba(255, 255, 255, 0.4);
+      --switcher-active: #ffffff;
+    }
+
+    [data-theme="erdera"] {
+      --bg-main: #f8f9fa;
+      --bg-panel: #ffffff;
+      --accent-soft: #b8c5d4;
+      --accent-dark: #2c3e5a;
+      --accent-hover: #1f2d42;
+      --text-main: #2f2f2f;
+      --text-muted: #6f6f6f;
+      --border-soft: #d4dae4;
+      --success-bg: #f5f6fa;
+      --header-bg: linear-gradient(to bottom, #2c3e5a 0%, #1f2d42 100%);
+      --header-border: 2px solid #ed7b91;
+      --header-text: #ffffff;
+      --header-muted: rgba(255, 255, 255, 0.8);
+      --header-stripe: linear-gradient(90deg, transparent, rgba(237, 123, 145, 0.5), transparent);
+      --card-shadow: rgba(44, 62, 90, 0.08);
+      --fair-bg: linear-gradient(to bottom, #f5f6fa, #eef0f5);
+      --footer-end: #e8eaef;
+      --erdera-coral: #ed7b91;
+      --switcher-border: rgba(255, 255, 255, 0.4);
+      --switcher-active: #ffffff;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+                   Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg-main);
+      color: var(--text-main);
+      line-height: 1.6;
+    }
+
+    h1, h2, h3 {
+      font-family: Georgia, "Times New Roman", serif;
+      font-weight: 500;
+    }
+
+    a { color: var(--accent-dark); text-decoration: none; }
+    a:hover { text-decoration: underline; color: var(--accent-hover); }
+
+    /* HEADER */
+    header {
+      padding: 3.5rem 2rem 3rem;
+      background: var(--header-bg);
+      border-bottom: var(--header-border);
+      position: relative;
+      overflow: hidden;
+    }
+
+    header::before {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 3px;
+      background: var(--header-stripe);
+      opacity: 0.4;
+    }
+
+    .header-inner {
+      max-width: 900px;
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    header h1 {
+      margin: 0 0 0.6rem 0;
+      font-size: 2.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      color: var(--header-text);
+    }
+
+    header h1::before {
+      content: "";
+      display: inline-block;
+      width: 52px; height: 52px;
+      background-image: url('koetai-icon.png');
+      background-size: contain;
+      background-repeat: no-repeat;
+      background-position: center;
+      flex-shrink: 0;
+    }
+
+    header .tagline {
+      margin: 0 0 0.5rem 0;
+      color: var(--header-muted);
+      font-style: italic;
+      font-size: 1.1rem;
+    }
+
+    header .subtitle {
+      margin: 0;
+      color: var(--header-muted);
+      font-size: 0.95rem;
+    }
+
+    /* THEME SWITCHER */
+    .theme-switcher {
+      position: absolute;
+      top: 1rem;
+      right: 1.5rem;
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      z-index: 1;
+    }
+
+    .theme-switcher button {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 2px solid var(--switcher-border);
+      cursor: pointer;
+      padding: 0;
+      transition: border-color 0.2s, transform 0.1s;
+    }
+
+    .theme-switcher button:hover {
+      transform: scale(1.15);
+    }
+
+    .theme-switcher button.active {
+      border-color: var(--switcher-active);
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
+    }
+
+    .theme-switcher button[data-theme-btn="koetai"] { background: #8b7355; }
+    .theme-switcher button[data-theme-btn="ahri"]   { background: #1a6b4a; }
+    .theme-switcher button[data-theme-btn="erdera"] { background: #2c3e5a; }
+
+    /* MAIN */
+    main {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 2.5rem 2rem;
+    }
+
+    /* INTRO */
+    .intro {
+      text-align: center;
+      margin-bottom: 2.5rem;
+      max-width: 700px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .intro p {
+      font-size: 1.05rem;
+      line-height: 1.8;
+      color: var(--text-main);
+    }
+
+    /* COMPONENT CARDS */
+    .components {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-soft);
+      border-radius: 8px;
+      padding: 1.75rem;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .card:hover {
+      border-color: var(--accent-soft);
+      box-shadow: 0 4px 16px var(--card-shadow);
+    }
+
+    .card .icon {
+      font-size: 2rem;
+      margin-bottom: 0.75rem;
+      line-height: 1;
+    }
+
+    .card h3 {
+      margin: 0 0 0.5rem 0;
+      font-size: 1.25rem;
+      color: var(--accent-dark);
+    }
+
+    .card p {
+      margin: 0 0 1.25rem 0;
+      color: var(--text-muted);
+      font-size: 0.93rem;
+      line-height: 1.7;
+      flex: 1;
+    }
+
+    .card .features {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 1.25rem 0;
+      font-size: 0.88rem;
+      color: var(--text-muted);
+    }
+
+    .card .features li {
+      padding: 0.25rem 0;
+      padding-left: 1.2em;
+      position: relative;
+    }
+
+    .card .features li::before {
+      content: "\2022";
+      position: absolute;
+      left: 0;
+      color: var(--accent-dark);
+      opacity: 0.6;
+    }
+
+    .card .launch {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.55rem 1.25rem;
+      background: var(--accent-dark);
+      color: #fff;
+      border-radius: 5px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      text-decoration: none;
+      transition: background 0.2s;
+      align-self: flex-start;
+    }
+
+    .card .launch:hover {
+      background: var(--accent-hover);
+      text-decoration: none;
+      color: #fff;
+    }
+
+    .card .launch::after {
+      content: " \2192";
+    }
+
+    /* FAIR PRINCIPLES */
+    .fair-section {
+      background: var(--fair-bg);
+      border: 1px solid var(--border-soft);
+      border-left: 4px solid var(--accent-dark);
+      border-radius: 8px;
+      padding: 2rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .fair-section h2 {
+      margin: 0 0 1.25rem 0;
+      font-size: 1.3rem;
+      color: var(--accent-dark);
+    }
+
+    .fair-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+    }
+
+    .fair-item {
+      text-align: center;
+      padding: 1rem 0.75rem;
+    }
+
+    .fair-item .letter {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 44px; height: 44px;
+      background: var(--accent-dark);
+      color: #fff;
+      border-radius: 50%;
+      font-family: Georgia, serif;
+      font-size: 1.3rem;
+      font-weight: 600;
+      margin-bottom: 0.6rem;
+    }
+
+    .fair-item h4 {
+      margin: 0 0 0.3rem 0;
+      font-size: 0.95rem;
+      font-family: Georgia, serif;
+      color: var(--text-main);
+    }
+
+    .fair-item p {
+      margin: 0;
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    /* ABOUT */
+    .about {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-soft);
+      border-radius: 8px;
+      padding: 2rem;
+      margin-bottom: 2rem;
+    }
+
+    .about h2 {
+      margin: 0 0 0.75rem 0;
+      font-size: 1.2rem;
+      color: var(--accent-dark);
+    }
+
+    .about p {
+      margin: 0 0 1rem 0;
+      color: var(--text-muted);
+      font-size: 0.93rem;
+      line-height: 1.7;
+    }
+
+    .about p:last-child { margin-bottom: 0; }
+
+    .theme-context {
+      display: none;
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border-soft);
+    }
+
+    .theme-context p { margin-bottom: 0; }
+
+    [data-theme="ahri"] .ahri-context   { display: block; }
+    [data-theme="erdera"] .erdera-context { display: block; }
+
+    /* FOOTER */
+    footer {
+      margin-top: 1rem;
+      padding: 2rem;
+      background: linear-gradient(to bottom, var(--bg-main), var(--footer-end));
+      border-top: 1px solid var(--border-soft);
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+
+    footer .powered-by {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.75rem;
+    }
+
+    footer .powered-by a {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      transition: color 0.2s;
+    }
+
+    footer .powered-by a:hover { color: var(--accent-dark); }
+    footer .powered-by img { height: 28px; width: auto; opacity: 0.8; }
+    footer .powered-by a:hover img { opacity: 1; }
+
+    /* RESPONSIVE */
+    @media (max-width: 700px) {
+      header { padding: 2.5rem 1.5rem 2rem; }
+      header h1 { font-size: 1.8rem; }
+      main { padding: 1.5rem 1rem; }
+      .components { grid-template-columns: 1fr; }
+      .fair-grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (max-width: 400px) {
+      .fair-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="theme-switcher" role="group" aria-label="Switch theme">
+    <button data-theme-btn="koetai" title="Koetai"></button>
+    <button data-theme-btn="ahri" title="AHRI"></button>
+    <button data-theme-btn="erdera" title="ERDERA"></button>
+  </div>
+  <div class="header-inner">
+    <h1>Koetai FAIR Data Explorer</h1>
+    <p class="tagline">Navigate the mangroves of RDF graphs with clarity &mdash; seeing above and below the waterline</p>
+    <p class="subtitle">An integrated suite of tools for exploring, querying, and managing biomedical linked data</p>
+  </div>
+</header>
+
+<main>
+
+  <div class="intro">
+    <p>
+      Koetai brings together SPARQL querying, curated examples, and FAIR metadata browsing into a single cohesive platform for biomedical knowledge graph exploration.
+    </p>
+  </div>
+
+  <!-- COMPONENT CARDS -->
+  <div class="components">
+
+    <!-- SPARQL Explorer -->
+    <div class="card">
+      <div class="icon">&#128269;</div>
+      <h3>SPARQL Explorer</h3>
+      <p>
+        Write and execute SPARQL queries against biomedical endpoints. Visualize results as tables, graphs, maps, charts, pathways, and timelines.
+      </p>
+      <ul class="features">
+        <li>Multiple pre-configured and custom endpoints</li>
+        <li>D3.js graph and Leaflet map visualizations</li>
+        <li>Shareable queries via URL parameters</li>
+        <li>Supports QLever, Wikidata, UniProt, and more</li>
+      </ul>
+      <a href="sparql.html" class="launch">Open SPARQL Explorer</a>
+    </div>
+
+    <!-- Examples Browser -->
+    <div class="card">
+      <div class="icon">&#128218;</div>
+      <h3>Examples Browser</h3>
+      <p>
+        Browse curated SPARQL query collections harvested from GitHub repositories. Learn from real-world queries and run them directly against endpoints.
+      </p>
+      <ul class="features">
+        <li>Harvest examples from any GitHub repository</li>
+        <li>Filter by endpoint, tags, and keywords</li>
+        <li>One-click execution and result preview</li>
+        <li>Collections from SIB, WikiPathways, Gene Ontology and others</li>
+      </ul>
+      <a href="examples.html" class="launch">Open Examples Browser</a>
+    </div>
+
+    <!-- FAIR Data Point -->
+    <div class="card">
+      <div class="icon">&#128202;</div>
+      <h3>FAIR Data Point</h3>
+      <p>
+        Browse the metadata catalog following the FAIR Data Point specification. Navigate the hierarchy from repositories through catalogs and datasets to distributions.
+      </p>
+      <ul class="features">
+        <li>Hierarchical metadata navigation with breadcrumbs</li>
+        <li>Search and filter across all metadata levels</li>
+        <li>Statistics overview of registered resources</li>
+        <li>Linked to SPARQL endpoints for data access</li>
+      </ul>
+      <a href="fdp.html" class="launch">Open FAIR Data Point</a>
+    </div>
+
+    <!-- Admin / Instance Manager -->
+    <div class="card">
+      <div class="icon">&#9881;</div>
+      <h3>RDF Instance Manager</h3>
+      <p>
+        Manage QLever SPARQL endpoints, import RDF data from files, and extract ShEx schemas. The administrative backbone of the Koetai platform.
+      </p>
+      <ul class="features">
+        <li>Create and manage QLever SPARQL instances</li>
+        <li>Drag-and-drop RDF data import</li>
+        <li>Automatic schema extraction with ShExer</li>
+        <li>Instance monitoring and log viewer</li>
+      </ul>
+      <a href="admin.html" class="launch">Open Instance Manager</a>
+    </div>
+
+  </div>
+
+  <!-- FAIR PRINCIPLES -->
+  <div class="fair-section">
+    <h2>Built Around FAIR Principles</h2>
+    <div class="fair-grid">
+      <div class="fair-item">
+        <div class="letter">F</div>
+        <h4>Findable</h4>
+        <p>Rich metadata and persistent identifiers make datasets discoverable through the FAIR Data Point catalog</p>
+      </div>
+      <div class="fair-item">
+        <div class="letter">A</div>
+        <h4>Accessible</h4>
+        <p>Standard SPARQL endpoints and open protocols ensure data can be retrieved by humans and machines alike</p>
+      </div>
+      <div class="fair-item">
+        <div class="letter">I</div>
+        <h4>Interoperable</h4>
+        <p>RDF and linked data standards enable integration across biomedical knowledge graphs worldwide</p>
+      </div>
+      <div class="fair-item">
+        <div class="letter">R</div>
+        <h4>Reusable</h4>
+        <p>Curated examples, clear schemas, and provenance metadata support meaningful data reuse</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ABOUT -->
+  <div class="about">
+    <h2>About Koetai</h2>
+    <p>
+      The koetai (Anableps anableps), or four-eyed fish, possesses a remarkable adaptation: eyes divided horizontally, allowing it to see simultaneously above and below the waterline. As it navigates the murky waters of mangrove estuaries, it watches for predators above while hunting prey below &mdash; maintaining constant dual awareness of its complex environment.
+    </p>
+    <p>
+      Similarly, effective FAIR data exploration requires dual vision: seeing both the surface patterns in query results and the deep structural relationships beneath. Just as the koetai navigates the tangled roots and channels of mangrove forests, this platform helps you navigate the interconnected triples and relationships of RDF graphs &mdash; each query revealing pathways through a rich, complex ecosystem of linked data.
+    </p>
+    <p style="font-style: italic;">
+      Koetai FAIR Data Explorer is a lightweight, open suite of tools for exploring biomedical linked data. It connects SPARQL querying, example discovery, metadata cataloging, and instance management into a unified experience built on open standards.
+    </p>
+
+    <div class="theme-context ahri-context">
+      <p>
+        This edition is configured for the <strong>Africa Health Research Institute (AHRI)</strong>, an independent, transdisciplinary scientific research institute based across two campuses in KwaZulu-Natal, South Africa. AHRI combines population, basic and translational, social, and clinical sciences to understand and improve the health and well-being of South African communities &mdash; working toward the elimination of HIV and TB and the optimal health of under-resourced populations.
+      </p>
+      <p>
+        AHRI partners with local communities and over 60 institutions globally, and prioritises training the next generation of African scientists. Its ~700 scientists, students, and staff are guided by the values of ubuntu, transformation, leadership, innovation, excellence, and collaboration.
+      </p>
+    </div>
+
+    <div class="theme-context erdera-context">
+      <p>
+        This edition is configured for <strong>ERDERA &mdash; the European Rare Diseases Research Alliance</strong>, a European partnership uniting over 170 public and private organisations across 37 countries around a single goal: turning cutting-edge science into tangible benefits for the thirty million Europeans living with a rare disease.
+      </p>
+      <p>
+        With an overall budget of &euro;380 million until 2031, ERDERA supports patient-driven research to develop new treatments and diagnostic pathways, harnessing the potential of health data, AI, and digital technologies. Built on the foundations of the European Joint Programme on Rare Diseases (EJP RD), ERDERA brings the community, data, and resources together to accelerate prevention, diagnosis, and treatment. The European Union contributes around &euro;150 million via Horizon Europe.
+      </p>
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  <div class="powered-by">
+    <a href="https://sparql.semscape.org/" target="_blank" rel="noopener">
+      <img src="koetai-icon.png" alt="Koetai" onerror="this.style.display='none'">
+      <span>Koetai</span>
+    </a>
+    <a href="https://github.com/ad-freiburg/qlever" target="_blank" rel="noopener">
+      <img src="https://raw.githubusercontent.com/ad-freiburg/qlever/master/docs/images/qlever-logo.png"
+           alt="QLever" onerror="this.style.display='none'">
+      <span>QLever</span>
+    </a>
+    <a href="https://www.fairdatapoint.org/" target="_blank" rel="noopener">
+      <span>FAIR Data Point</span>
+    </a>
+  </div>
+  <div>Part of the <strong>Koetai RDF Framework</strong></div>
+</footer>
+
+<script>
+  (function(){
+    function setTheme(t) {
+      document.documentElement.setAttribute('data-theme', t);
+      localStorage.setItem('koetai-theme', t);
+      document.querySelectorAll('[data-theme-btn]').forEach(function(b){
+        b.classList.toggle('active', b.dataset.themeBtn === t);
+      });
+    }
+    var current = document.documentElement.getAttribute('data-theme') || 'koetai';
+    document.querySelectorAll('[data-theme-btn]').forEach(function(b){
+      b.classList.toggle('active', b.dataset.themeBtn === current);
+      b.addEventListener('click', function(){ setTheme(b.dataset.themeBtn); });
+    });
+  })();
+</script>
+
+</body>
+</html>

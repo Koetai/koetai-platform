@@ -1,0 +1,2184 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Koetai SPARQL Explorer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    :root {
+      --bg-main: #f7f6f3;
+      --bg-panel: #ffffff;
+      --accent-soft: #d4c9b8;
+      --accent-dark: #8b7355;
+      --accent-hover: #6b5844;
+      --text-main: #2f2f2f;
+      --text-muted: #6f6f6f;
+      --border-soft: #e3e3df;
+      --success-bg: #f5f2ed;
+      --error-bg: #fff5f5;
+      --water-light: #b8a995;
+      --water-dark: #a39582;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+                   Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg-main);
+      color: var(--text-main);
+      line-height: 1.6;
+    }
+
+    h1, h2 {
+      font-family: Georgia, "Times New Roman", serif;
+      font-weight: 500;
+    }
+
+    header {
+      padding: 3rem 2rem;
+      background: linear-gradient(to bottom, #f5f2ed 0%, #e8e3d9 100%);
+      border-bottom: 2px solid var(--accent-soft);
+      position: relative;
+      overflow: hidden;
+    }
+
+    header::before {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, var(--water-dark), transparent);
+      opacity: 0.4;
+    }
+
+    header h1 {
+      margin: 0 0 0.5rem 0;
+      font-size: 2.3rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      color: var(--accent-dark);
+    }
+
+    header h1::before {
+      content: "";
+      display: inline-block;
+      width: 48px;
+      height: 48px;
+      background-image: url('koetai-icon.png');
+      background-size: contain;
+      background-repeat: no-repeat;
+      background-position: center;
+      flex-shrink: 0;
+    }
+
+    header p {
+      margin: 0;
+      color: var(--text-muted);
+      max-width: 48rem;
+      font-style: italic;
+    }
+
+    header p::before {
+      content: "🐟 ";
+      opacity: 0.6;
+    }
+
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 2rem;
+      display: grid;
+      gap: 2rem;
+    }
+
+    .panel {
+      background: var(--bg-panel);
+      padding: 1.5rem;
+      border-radius: 6px;
+      border: 1px solid var(--border-soft);
+    }
+
+    .panel h2 {
+      margin-top: 0;
+      font-size: 1.4rem;
+    }
+
+    /* ENDPOINT SELECTOR */
+    .endpoint-panel {
+      background: var(--bg-panel);
+      padding: 1.25rem;
+      border-radius: 6px;
+      border: 2px solid var(--accent-dark);
+    }
+
+    .endpoint-controls {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 0.75rem;
+    }
+
+    .endpoint-controls label {
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .endpoint-controls select {
+      padding: 0.5rem 0.75rem;
+      font-size: 0.9rem;
+      border: 1px solid var(--border-soft);
+      border-radius: 4px;
+      background: #fff;
+      min-width: 280px;
+      cursor: pointer;
+    }
+
+    .endpoint-controls button {
+      padding: 0.5rem 1rem;
+      font-size: 0.85rem;
+      background: #f5f5f5;
+      border: 1px solid var(--border-soft);
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .endpoint-controls button:hover {
+      background: #e8e8e8;
+    }
+
+    .endpoint-status {
+      padding: 0.75rem;
+      background: var(--success-bg);
+      border-radius: 4px;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .endpoint-status strong {
+      color: var(--text-main);
+    }
+
+    /* MODAL */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal {
+      background: var(--bg-panel);
+      padding: 2rem;
+      border-radius: 8px;
+      max-width: 600px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    .modal h2 {
+      margin-top: 0;
+      font-size: 1.5rem;
+    }
+
+    .endpoint-list {
+      margin-bottom: 1.5rem;
+    }
+
+    .endpoint-item {
+      padding: 0.75rem;
+      border: 1px solid var(--border-soft);
+      border-radius: 4px;
+      margin-bottom: 0.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .endpoint-item.active {
+      background: var(--success-bg);
+      border-color: var(--accent-dark);
+    }
+
+    .endpoint-info {
+      flex: 1;
+    }
+
+    .endpoint-name {
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+
+    .endpoint-url {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      word-break: break-all;
+    }
+
+    .endpoint-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .endpoint-actions button {
+      padding: 0.4rem 0.75rem;
+      font-size: 0.8rem;
+      border: 1px solid var(--border-soft);
+      border-radius: 4px;
+      cursor: pointer;
+      background: #f5f5f5;
+    }
+
+    .endpoint-actions button.active-btn {
+      background: var(--accent-dark);
+      color: #fff;
+      border-color: var(--accent-dark);
+    }
+
+    .add-endpoint {
+      padding: 1rem;
+      background: #f9f9f9;
+      border-radius: 4px;
+      margin-bottom: 1.5rem;
+    }
+
+    .add-endpoint h3 {
+      margin-top: 0;
+      font-size: 1.1rem;
+    }
+
+    .form-group {
+      margin-bottom: 0.75rem;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 0.5rem;
+      border: 1px solid var(--border-soft);
+      border-radius: 4px;
+      font-size: 0.9rem;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 10rem;
+      font-family: monospace;
+      font-size: 0.95rem;
+      padding: 0.75rem;
+      border: 1px solid var(--border-soft);
+      border-radius: 4px;
+      background: #fafafa;
+      resize: vertical;
+    }
+
+    button.primary {
+      padding: 0.5rem 1.2rem;
+      font-size: 0.9rem;
+      background: var(--accent-dark);
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    button.primary:hover {
+      background: var(--accent-hover);
+    }
+
+    button.secondary {
+      padding: 0.5rem 1.2rem;
+      font-size: 0.9rem;
+      background: #f5f5f5;
+      color: var(--text-main);
+      border: 1px solid var(--border-soft);
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    button.secondary:hover {
+      background: #e8e8e8;
+    }
+
+    #message {
+      padding: 1rem;
+      margin-bottom: 1rem;
+      border-radius: 4px;
+      display: none;
+    }
+
+    #message.success {
+      background: var(--success-bg);
+      color: #2d5016;
+      border: 1px solid #a8d08d;
+      display: block;
+    }
+
+    #message.error {
+      background: var(--error-bg);
+      color: #a94442;
+      border: 1px solid #f5c6cb;
+      display: block;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+      background: #fff;
+      font-size: 0.9rem;
+    }
+
+    table th,
+    table td {
+      padding: 0.75rem;
+      border: 1px solid var(--border-soft);
+      text-align: left;
+    }
+
+    table th {
+      background: var(--success-bg);
+      font-weight: 600;
+      color: var(--accent-dark);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    table tbody tr:hover {
+      background: #f9f9f9;
+    }
+
+    table a {
+      color: var(--accent-dark);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    table a:hover {
+      text-decoration: underline;
+    }
+
+    .results-container {
+      max-height: 600px;
+      overflow: auto;
+      border: 1px solid var(--border-soft);
+      border-radius: 4px;
+    }
+
+    .muted {
+      color: var(--text-muted);
+      font-style: italic;
+    }
+
+    .export-buttons {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .export-buttons button {
+      padding: 0.4rem 0.8rem;
+      font-size: 0.85rem;
+      background: #f5f5f5;
+      border: 1px solid var(--border-soft);
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .export-buttons button:hover {
+      background: #e8e8e8;
+    }
+
+    /* VIZ TABS */
+    #viz-tabs {
+      display: none;
+      margin-bottom: 1rem;
+    }
+
+    .tab-buttons {
+      display: flex;
+      gap: 0.5rem;
+      border-bottom: 2px solid var(--border-soft);
+      margin-bottom: 1rem;
+    }
+
+    .tab-buttons button {
+      padding: 0.6rem 1.2rem;
+      background: transparent;
+      border: none;
+      border-bottom: 3px solid transparent;
+      cursor: pointer;
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      transition: all 0.2s;
+    }
+
+    .tab-buttons button:hover {
+      color: var(--text-main);
+      background: #f9f9f9;
+    }
+
+    .tab-buttons button.active {
+      color: var(--accent-dark);
+      border-bottom-color: var(--accent-dark);
+      font-weight: 600;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    /* GRAPH VIZ */
+    #graph-container {
+      background: #fff;
+      border: 1px solid var(--border-soft);
+      border-radius: 4px;
+      min-height: 500px;
+      position: relative;
+    }
+
+    #graph-container svg {
+      width: 100%;
+      height: 500px;
+    }
+
+    .node {
+      cursor: pointer;
+    }
+
+    .node circle {
+      fill: var(--accent-soft);
+      stroke: var(--accent-dark);
+      stroke-width: 2px;
+    }
+
+    .node:hover circle {
+      fill: var(--water-light);
+    }
+
+    .node text {
+      font-size: 11px;
+      pointer-events: none;
+      text-anchor: middle;
+    }
+
+    .link {
+      stroke: var(--water-dark);
+      stroke-opacity: 0.6;
+      stroke-width: 1.5px;
+      fill: none;
+    }
+
+    .link-label {
+      font-size: 9px;
+      fill: var(--text-muted);
+      pointer-events: none;
+    }
+
+    /* MAP VIZ */
+    #map-container {
+      background: #fff;
+      border: 1px solid var(--border-soft);
+      border-radius: 4px;
+      height: 500px;
+      position: relative;
+    }
+
+    /* CHART VIZ */
+    #chart-container {
+      background: #fff;
+      border: 1px solid var(--border-soft);
+      border-radius: 4px;
+      min-height: 400px;
+      padding: 1rem;
+    }
+
+    .chart-tooltip {
+      position: absolute;
+      background: rgba(47, 47, 47, 0.95);
+      color: #fff;
+      padding: 0.5rem 0.75rem;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s;
+      z-index: 1000;
+    }
+
+    /* PATHWAY VIZ */
+    #pathway-container {
+      background: #fff;
+      border: 1px solid var(--border-soft);
+      border-radius: 4px;
+      min-height: 400px;
+      padding: 1rem;
+    }
+
+    .pathway-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 1rem;
+    }
+
+    .pathway-card {
+      border: 1px solid var(--border-soft);
+      border-radius: 4px;
+      padding: 1rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: #fff;
+    }
+
+    .pathway-card:hover {
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      border-color: var(--accent-dark);
+    }
+
+    .pathway-title {
+      font-weight: 600;
+      font-size: 1rem;
+      margin-bottom: 0.5rem;
+      color: var(--accent-dark);
+    }
+
+    .pathway-meta {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+    }
+
+    .pathway-description {
+      font-size: 0.85rem;
+      color: var(--text-main);
+      margin-top: 0.5rem;
+      line-height: 1.4;
+    }
+
+    .pathway-network {
+      min-height: 500px;
+      position: relative;
+    }
+
+    .pathway-node circle {
+      cursor: pointer;
+    }
+
+    .pathway-link {
+      stroke: var(--water-dark);
+      stroke-opacity: 0.4;
+    }
+
+    /* TIMELINE VIZ */
+    #timeline-container {
+      background: #fff;
+      border: 1px solid var(--border-soft);
+      border-radius: 4px;
+      min-height: 300px;
+      padding: 1rem;
+    }
+
+    .timeline-item {
+      padding: 0.75rem;
+      border-left: 3px solid var(--accent-dark);
+      margin-bottom: 1rem;
+      background: #fafafa;
+      border-radius: 0 4px 4px 0;
+    }
+
+    .timeline-date {
+      font-weight: 600;
+      color: var(--accent-dark);
+      margin-bottom: 0.25rem;
+    }
+
+    .timeline-content {
+      font-size: 0.9rem;
+      color: var(--text-main);
+    }
+
+    @media (max-width: 768px) {
+      header {
+        padding: 2rem 1rem;
+      }
+
+      header h1 {
+        font-size: 1.8rem;
+      }
+
+      main {
+        padding: 1rem;
+      }
+
+      .endpoint-controls {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .endpoint-controls select {
+        min-width: auto;
+      }
+
+      .tab-buttons {
+        flex-wrap: wrap;
+      }
+
+      .pathway-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+<header>
+  <h1>Koetai SPARQL Explorer</h1>
+  <p>Navigate the mangroves of RDF graphs with clarity — seeing above and below the waterline like the four-eyed fish (Anableps anableps)</p>
+</header>
+
+<main>
+
+  <!-- ENDPOINT SELECTOR -->
+  <div class="endpoint-panel">
+    <div class="endpoint-controls">
+      <label for="endpoint-select">SPARQL Endpoint:</label>
+      <select id="endpoint-select" onchange="switchEndpoint()">
+        <optgroup label="Koetai">
+          <option value="ordo_orphanet">ORDO — Orphanet Rare Disease Ontology</option>
+          <option value="ahri">AHRI — Africa Health Research Institute</option>
+        </optgroup>
+        <optgroup label="Remote">
+          <option value="wikidata">Wikidata Query Service</option>
+          <option value="uniprot">UniProt SPARQL</option>
+          <option value="wikipathways">WikiPathways SPARQL (remote)</option>
+        </optgroup>
+        <option value="custom">Custom Endpoint...</option>
+      </select>
+      <button onclick="openManageEndpoints()">Manage Endpoints</button>
+    </div>
+    <div id="endpoint-status" class="endpoint-status">
+      <strong>Current:</strong> <span id="current-endpoint-url">https://koetai.semscape.org/u/0000-0001-9773-4008/ordo-orphanet/sparql</span>
+    </div>
+  </div>
+
+  <!-- MANAGE ENDPOINTS MODAL -->
+  <div id="manage-modal" class="modal-overlay">
+    <div class="modal">
+      <h2>Manage SPARQL Endpoints</h2>
+      
+      <div class="add-endpoint">
+        <h3>Add Custom Endpoint</h3>
+        <div class="form-group">
+          <label for="endpoint-name">Name:</label>
+          <input type="text" id="endpoint-name" placeholder="My Endpoint" />
+        </div>
+        <div class="form-group">
+          <label for="endpoint-url">URL:</label>
+          <input type="text" id="endpoint-url" placeholder="https://example.org/sparql" />
+        </div>
+        <button class="primary" onclick="addCustomEndpoint()">Add Endpoint</button>
+      </div>
+
+      <div class="endpoint-list" id="endpoint-list">
+        <!-- Dynamic content -->
+      </div>
+
+      <div class="modal-actions">
+        <button class="secondary" onclick="closeManageEndpoints()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="message"></div>
+
+  <div class="panel">
+    <h2>SPARQL Query</h2>
+    <textarea id="query" placeholder="Enter your SPARQL query here..."></textarea>
+    <div style="margin-top: 1rem; display: flex; gap: 0.75rem; flex-wrap: wrap;">
+      <button class="primary" onclick="runQuery()">Run Query</button>
+      <button class="secondary" onclick="loadExample()">Load Example</button>
+      <button class="secondary" onclick="openExamplesBrowser()">Browse Examples</button>
+      <button class="secondary" onclick="clearQuery()">Clear</button>
+    </div>
+  </div>
+
+  <!-- EXAMPLES PICKER PANEL -->
+  <div class="panel" id="examples-panel" style="display:none;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+      <h2 style="margin:0;">Example Queries</h2>
+      <button class="secondary" onclick="closeExamplesBrowser()" style="padding:0.4rem 0.8rem; font-size:0.85rem;">Close</button>
+    </div>
+    <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.75rem;" id="examples-count"></div>
+    <input type="text" id="examples-filter" placeholder="Filter by title, endpoint, or tag..."
+      style="width:100%; padding:0.5rem; margin-bottom:0.75rem; border:1px solid var(--border-soft); border-radius:4px; font-size:0.9rem;"
+      oninput="filterStoredExamples()" />
+    <div id="examples-list" style="max-height:400px; overflow-y:auto;"></div>
+  </div>
+
+  <!-- VIZ TABS -->
+  <div id="viz-tabs">
+    <div class="tab-buttons">
+      <button class="active" onclick="switchTab('table')">Table</button>
+      <button onclick="switchTab('graph')">Graph</button>
+      <button onclick="switchTab('map')">Map</button>
+      <button onclick="switchTab('chart')">Chart</button>
+      <button onclick="switchTab('pathway')">Pathway</button>
+      <button onclick="switchTab('timeline')">Timeline</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Results</h2>
+    
+    <!-- TABLE VIEW (default) -->
+    <div id="tab-table" class="tab-content active">
+      <div id="results">
+        <div class="muted">No results yet. Enter a query and click Run Query.</div>
+      </div>
+      <div id="export-section" style="display: none;">
+        <div class="export-buttons">
+          <button onclick="exportCSV()">Export CSV</button>
+          <button onclick="exportJSON()">Export JSON</button>
+          <button onclick="exportTSV()">Export TSV</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- GRAPH VIEW -->
+    <div id="tab-graph" class="tab-content">
+      <div id="graph-container"></div>
+    </div>
+
+    <!-- MAP VIEW -->
+    <div id="tab-map" class="tab-content">
+      <div id="map-container"></div>
+    </div>
+
+    <!-- CHART VIEW -->
+    <div id="tab-chart" class="tab-content">
+      <div id="chart-container"></div>
+    </div>
+
+    <!-- PATHWAY VIEW -->
+    <div id="tab-pathway" class="tab-content">
+      <div id="pathway-container"></div>
+    </div>
+
+    <!-- TIMELINE VIEW -->
+    <div id="tab-timeline" class="tab-content">
+      <div id="timeline-container"></div>
+    </div>
+  </div>
+
+  <!-- ABOUT SECTION -->
+  <div class="panel" style="background: linear-gradient(to bottom, #faf8f5 0%, #f5f2ed 100%); border-left: 4px solid var(--accent-dark);">
+    <h2 style="display: flex; align-items: center; gap: 0.5rem; color: var(--accent-dark);">
+      🐟 Koetai: Dual Vision in Data Exploration
+    </h2>
+    
+    <div style="display: grid; gap: 1.5rem; margin-top: 1rem;">
+      <div>
+        <h3 style="font-size: 1.1rem; margin: 0 0 0.5rem 0; color: var(--accent-dark);">Seeing Above and Below</h3>
+        <p style="margin: 0; line-height: 1.7;">
+          The koetai (Anableps anableps), or four-eyed fish, possesses a remarkable adaptation: eyes divided horizontally, allowing it to see simultaneously above and below the waterline. As it navigates the murky waters of mangrove estuaries, it watches for predators above while hunting prey below—maintaining constant dual awareness of its complex environment.
+        </p>
+      </div>
+      
+      <div>
+        <h3 style="font-size: 1.1rem; margin: 0 0 0.5rem 0; color: var(--accent-dark);">Navigating the Mangroves of Data</h3>
+        <p style="margin: 0; line-height: 1.7;">
+          Similarly, SPARQL exploration requires dual vision: seeing both the surface patterns in your query results and the deep structural relationships beneath. Just as the koetai navigates the tangled roots and channels of mangrove forests, you navigate the interconnected triples and relationships of RDF graphs—each query revealing pathways through a rich, complex ecosystem of linked data.
+        </p>
+      </div>
+      
+      <div>
+        <h3 style="font-size: 1.1rem; margin: 0 0 0.5rem 0; color: var(--accent-dark);">About This Explorer</h3>
+        <p style="margin: 0 0 0.75rem 0; line-height: 1.7;">
+          Koetai SPARQL Explorer is a lightweight, read-only interface for exploring biomedical linked data across multiple endpoints. It emphasizes the relationship between visible query results and the structural foundations that make them possible.
+        </p>
+        <p style="margin: 0; line-height: 1.7; font-style: italic; color: var(--text-muted);">
+          The koetai metaphor reflects how effective data exploration requires simultaneous awareness of multiple perspectives: surface patterns and deep structure, local details and global context, individual triples and complete knowledge graphs. Like the four-eyed fish in its mangrove home, navigate with clarity through the complex waters of linked data.
+        </p>
+      </div>
+      
+      <div style="padding: 1.25rem; background: #e8e3d9; border-radius: 4px; font-size: 0.95rem; color: #6f6f6f; line-height: 1.8;">
+        <div><strong style="color: #6f6f6f;">Default endpoint:</strong> <span style="color: #8b7355; font-weight: 500;">Olympics (local QLever)</span></div>
+        <div>Koetai-themed biomedical data explorer</div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ENDPOINT MANAGEMENT
+let endpoints = {
+  // ── Koetai datasets ──
+  // Served by the platform as named graphs. The /endpoint2 and /endpoint3 URLs
+  // still work (they 308 to the platform), but point at the real home.
+  ordo_orphanet: {
+    name: 'ORDO — Orphanet Rare Disease Ontology',
+    url: 'https://koetai.semscape.org/u/0000-0001-9773-4008/ordo-orphanet/sparql'
+  },
+  ahri: {
+    name: 'AHRI — Africa Health Research Institute',
+    url: 'https://koetai.semscape.org/u/0000-0003-2328-5208/ahri/sparql'
+  },
+  // Olympics, the FDP and the local WikiPathways instances were retired: the
+  // first two had been down for months, and the WikiPathways download had
+  // silently failed, so it only ever held VoID metadata. The FAIR Data Point
+  // now lives at https://koetai.semscape.org/fdp and WikiPathways is upstream.
+  // ── Remote endpoints ──
+  wikidata: {
+    name: 'Wikidata Query Service',
+    url: 'https://query.wikidata.org/sparql'
+  },
+  uniprot: {
+    name: 'UniProt SPARQL',
+    url: 'https://sparql.uniprot.org/sparql'
+  },
+  wikipathways: {
+    name: 'WikiPathways SPARQL (remote)',
+    url: 'https://sparql.wikipathways.org/sparql'
+  }
+};
+
+let currentEndpoint = 'ordo_orphanet';
+let customEndpoints = JSON.parse(localStorage.getItem('customEndpoints') || '{}');
+let lastResults = null;
+
+// Merge custom endpoints
+endpoints = { ...endpoints, ...customEndpoints };
+
+function switchEndpoint() {
+  const select = document.getElementById('endpoint-select');
+  const value = select.value;
+  
+  if (value === 'custom') {
+    openManageEndpoints();
+    return;
+  }
+  
+  currentEndpoint = value;
+  document.getElementById('current-endpoint-url').textContent = endpoints[currentEndpoint].url;
+}
+
+function openManageEndpoints() {
+  renderEndpointList();
+  document.getElementById('manage-modal').classList.add('active');
+}
+
+function closeManageEndpoints() {
+  document.getElementById('manage-modal').classList.remove('active');
+  updateEndpointSelect();
+}
+
+function renderEndpointList() {
+  const container = document.getElementById('endpoint-list');
+  let html = '';
+  
+  for (const [key, ep] of Object.entries(endpoints)) {
+    const isCustom = customEndpoints.hasOwnProperty(key);
+    const isActive = key === currentEndpoint;
+    
+    html += `
+      <div class="endpoint-item ${isActive ? 'active' : ''}">
+        <div class="endpoint-info">
+          <div class="endpoint-name">${ep.name}</div>
+          <div class="endpoint-url">${ep.url}</div>
+        </div>
+        <div class="endpoint-actions">
+          ${!isActive ? `<button onclick="setActiveEndpoint('${key}')">Use</button>` : '<button class="active-btn">Active</button>'}
+          ${isCustom ? `<button onclick="deleteEndpoint('${key}')">Delete</button>` : ''}
+        </div>
+      </div>
+    `;
+  }
+  
+  container.innerHTML = html;
+}
+
+function addCustomEndpoint() {
+  const name = document.getElementById('endpoint-name').value.trim();
+  const url = document.getElementById('endpoint-url').value.trim();
+  
+  if (!name || !url) {
+    showMessage('Please provide both name and URL', 'error');
+    return;
+  }
+  
+  const key = 'custom_' + Date.now();
+  customEndpoints[key] = { name, url };
+  endpoints[key] = { name, url };
+  
+  localStorage.setItem('customEndpoints', JSON.stringify(customEndpoints));
+  
+  document.getElementById('endpoint-name').value = '';
+  document.getElementById('endpoint-url').value = '';
+  
+  renderEndpointList();
+  updateEndpointSelect();
+  showMessage('Endpoint added successfully', 'success');
+}
+
+function deleteEndpoint(key) {
+  if (key === currentEndpoint) {
+    showMessage('Cannot delete the active endpoint', 'error');
+    return;
+  }
+  
+  delete customEndpoints[key];
+  delete endpoints[key];
+  localStorage.setItem('customEndpoints', JSON.stringify(customEndpoints));
+  
+  renderEndpointList();
+  updateEndpointSelect();
+  showMessage('Endpoint deleted', 'success');
+}
+
+function setActiveEndpoint(key) {
+  currentEndpoint = key;
+  document.getElementById('current-endpoint-url').textContent = endpoints[currentEndpoint].url;
+  document.getElementById('endpoint-select').value = key;
+  renderEndpointList();
+  showMessage('Endpoint switched', 'success');
+}
+
+function updateEndpointSelect() {
+  const select = document.getElementById('endpoint-select');
+  const currentValue = select.value;
+  
+  // Keep built-in options
+  let html = `
+    <optgroup label="Koetai">
+      <option value="ordo_orphanet">ORDO — Orphanet Rare Disease Ontology</option>
+      <option value="ahri">AHRI — Africa Health Research Institute</option>
+    </optgroup>
+    <optgroup label="Remote">
+      <option value="wikidata">Wikidata Query Service</option>
+      <option value="uniprot">UniProt SPARQL</option>
+      <option value="wikipathways">WikiPathways SPARQL (remote)</option>
+    </optgroup>
+  `;
+  
+  // Add custom endpoints
+  for (const [key, ep] of Object.entries(customEndpoints)) {
+    html += `<option value="${key}">${ep.name}</option>`;
+  }
+  
+  html += '<option value="custom">Custom Endpoint...</option>';
+  
+  select.innerHTML = html;
+  select.value = currentValue === 'custom' ? currentEndpoint : currentValue;
+}
+
+// Initialize
+updateEndpointSelect();
+
+// QUERY EXECUTION
+async function runQuery() {
+  const query = document.getElementById('query').value.trim();
+  
+  if (!query) {
+    showMessage('Please enter a SPARQL query', 'error');
+    return;
+  }
+  
+  showMessage('Running query...', 'success');
+  
+  const endpointUrl = endpoints[currentEndpoint].url;
+  const url = `${endpointUrl}?query=${encodeURIComponent(query)}`;
+  
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/sparql-results+json'
+      },
+      mode: 'cors'
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    lastResults = data;
+    
+    displayResults(data);
+    showMessage(`Query executed successfully. ${data.results.bindings.length} results returned.`, 'success');
+    
+    // Show visualization tabs
+    document.getElementById('viz-tabs').style.display = 'block';
+    
+    // Update all visualizations
+    updateVisualizations(data);
+    
+  } catch (error) {
+    let errorMsg = 'Query execution failed. ';
+    
+    if (error.message.includes('Failed to fetch')) {
+      errorMsg += 'This may be due to CORS restrictions or network issues. ';
+      errorMsg += 'Try using a CORS proxy or ensure the endpoint allows cross-origin requests.';
+    } else {
+      errorMsg += error.message;
+    }
+    
+    showMessage(errorMsg, 'error');
+    console.error('Query error:', error);
+    
+    // Show helpful message in results
+    document.getElementById('results').innerHTML = `
+      <div style="padding: 2rem; background: #fff5f5; border: 1px solid #f5c6cb; border-radius: 4px;">
+        <h3 style="margin-top: 0; color: #a94442;">Query Error</h3>
+        <p><strong>Error:</strong> ${error.message}</p>
+        <p><strong>Endpoint:</strong> ${endpointUrl}</p>
+        <h4>Possible solutions:</h4>
+        <ul>
+          <li>Check that the SPARQL endpoint URL is correct and accessible</li>
+          <li>Ensure the endpoint supports CORS (Cross-Origin Resource Sharing)</li>
+          <li>Verify your query syntax is valid SPARQL</li>
+          <li>Try a different endpoint from the dropdown</li>
+          <li>Check your network connection</li>
+        </ul>
+        <p style="margin-top: 1rem; padding: 1rem; background: #f9f9f9; border-left: 4px solid #8b7355;">
+          <strong>Note:</strong> Some SPARQL endpoints may require special configuration or 
+          may not allow queries from web browsers due to security restrictions. 
+          If this persists, consider using the endpoint's own query interface or a CORS proxy service.
+        </p>
+      </div>
+    `;
+  }
+}
+
+function displayResults(data) {
+  const resultsDiv = document.getElementById('results');
+  const vars = data.head.vars;
+  const bindings = data.results.bindings;
+  
+  if (bindings.length === 0) {
+    resultsDiv.innerHTML = '<div class="muted">No results found.</div>';
+    document.getElementById('export-section').style.display = 'none';
+    return;
+  }
+  
+  let html = '<div class="results-container"><table><thead><tr>';
+  
+  vars.forEach(v => {
+    html += `<th>${v}</th>`;
+  });
+  
+  html += '</tr></thead><tbody>';
+  
+  bindings.forEach(row => {
+    html += '<tr>';
+    vars.forEach(v => {
+      const value = row[v];
+      if (value) {
+        if (value.type === 'uri') {
+          html += `<td><a href="${value.value}" target="_blank">${value.value}</a></td>`;
+        } else {
+          html += `<td>${value.value}</td>`;
+        }
+      } else {
+        html += '<td class="muted">-</td>';
+      }
+    });
+    html += '</tr>';
+  });
+  
+  html += '</tbody></table></div>';
+  
+  resultsDiv.innerHTML = html;
+  document.getElementById('export-section').style.display = 'block';
+}
+
+function updateVisualizations(data) {
+  const vars = data.head.vars;
+  const rows = data.results.bindings;
+  
+  // Update graph
+  renderGraph(vars, rows);
+  
+  // Update map
+  renderMap(vars, rows);
+  
+  // Update chart
+  renderChart(vars, rows);
+  
+  // Update pathway
+  renderPathways(vars, rows);
+  
+  // Update timeline
+  renderTimeline(vars, rows);
+}
+
+function showMessage(text, type) {
+  const msg = document.getElementById('message');
+  msg.textContent = text;
+  msg.className = type;
+  
+  if (type === 'success') {
+    setTimeout(() => {
+      msg.style.display = 'none';
+    }, 3000);
+  }
+}
+
+// TAB SWITCHING
+function switchTab(tabName) {
+  // Hide all tabs
+  document.querySelectorAll('.tab-content').forEach(tab => {
+    tab.classList.remove('active');
+  });
+  
+  // Remove active from all buttons
+  document.querySelectorAll('.tab-buttons button').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  
+  // Show selected tab
+  document.getElementById(`tab-${tabName}`).classList.add('active');
+  
+  // Activate button
+  event.target.classList.add('active');
+  
+  // Special handling for map (needs to invalidate size)
+  if (tabName === 'map' && window.currentMap) {
+    setTimeout(() => {
+      window.currentMap.invalidateSize();
+    }, 100);
+  }
+}
+
+// EXPORT FUNCTIONS
+function exportCSV() {
+  if (!lastResults) return;
+  
+  const vars = lastResults.head.vars;
+  const rows = lastResults.results.bindings;
+  
+  let csv = vars.join(',') + '\n';
+  
+  rows.forEach(row => {
+    const values = vars.map(v => {
+      const val = row[v];
+      return val ? `"${val.value.replace(/"/g, '""')}"` : '';
+    });
+    csv += values.join(',') + '\n';
+  });
+  
+  downloadFile(csv, 'results.csv', 'text/csv');
+}
+
+function exportJSON() {
+  if (!lastResults) return;
+  
+  const json = JSON.stringify(lastResults, null, 2);
+  downloadFile(json, 'results.json', 'application/json');
+}
+
+function exportTSV() {
+  if (!lastResults) return;
+  
+  const vars = lastResults.head.vars;
+  const rows = lastResults.results.bindings;
+  
+  let tsv = vars.join('\t') + '\n';
+  
+  rows.forEach(row => {
+    const values = vars.map(v => {
+      const val = row[v];
+      return val ? val.value : '';
+    });
+    tsv += values.join('\t') + '\n';
+  });
+  
+  downloadFile(tsv, 'results.tsv', 'text/tab-separated-values');
+}
+
+function downloadFile(content, filename, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// GRAPH VISUALIZATION
+function renderGraph(vars, rows) {
+  const container = document.getElementById('graph-container');
+  container.innerHTML = '';
+  
+  // Detect subject-predicate-object pattern
+  const hasSubject = vars.some(v => v.toLowerCase().includes('subject') || v.toLowerCase() === 's');
+  const hasPredicate = vars.some(v => v.toLowerCase().includes('predicate') || v.toLowerCase() === 'p');
+  const hasObject = vars.some(v => v.toLowerCase().includes('object') || v.toLowerCase() === 'o');
+  
+  if (!hasSubject && !hasPredicate && !hasObject && vars.length < 2) {
+    container.innerHTML = '<div class="muted" style="padding: 2rem; text-align: center;">' +
+      'Graph view requires at least 2 variables or subject-predicate-object pattern.<br>' +
+      'Try a query like:<br>' +
+      '<code>SELECT ?subject ?predicate ?object WHERE { ?subject ?predicate ?object } LIMIT 50</code>' +
+      '</div>';
+    return;
+  }
+  
+  const graphData = extractGraphData(vars, rows);
+  
+  if (graphData.nodes.length === 0) {
+    container.innerHTML = '<div class="muted" style="padding: 2rem; text-align: center;">No graph data to display</div>';
+    return;
+  }
+  
+  const width = container.clientWidth || 800;
+  const height = 500;
+  
+  const svg = d3.select(container)
+    .append('svg')
+    .attr('width', width)
+    .attr('height', height);
+  
+  const simulation = d3.forceSimulation(graphData.nodes)
+    .force('link', d3.forceLink(graphData.links).id(d => d.id).distance(120))
+    .force('charge', d3.forceManyBody().strength(-400))
+    .force('center', d3.forceCenter(width / 2, height / 2))
+    .force('collision', d3.forceCollide().radius(50));
+  
+  const link = svg.append('g')
+    .selectAll('path')
+    .data(graphData.links)
+    .join('path')
+    .attr('class', 'link')
+    .attr('marker-end', 'url(#arrowhead)');
+  
+  // Add arrowhead marker
+  svg.append('defs').append('marker')
+    .attr('id', 'arrowhead')
+    .attr('viewBox', '-0 -5 10 10')
+    .attr('refX', 25)
+    .attr('refY', 0)
+    .attr('orient', 'auto')
+    .attr('markerWidth', 8)
+    .attr('markerHeight', 8)
+    .append('svg:path')
+    .attr('d', 'M 0,-5 L 10 ,0 L 0,5')
+    .attr('fill', '#a39582')
+    .style('stroke', 'none');
+  
+  const linkLabel = svg.append('g')
+    .selectAll('text')
+    .data(graphData.links)
+    .join('text')
+    .attr('class', 'link-label')
+    .text(d => d.label.length > 30 ? d.label.substring(0, 30) + '...' : d.label);
+  
+  const node = svg.append('g')
+    .selectAll('g')
+    .data(graphData.nodes)
+    .join('g')
+    .attr('class', 'node')
+    .call(d3.drag()
+      .on('start', dragstarted)
+      .on('drag', dragged)
+      .on('end', dragended));
+  
+  node.append('circle')
+    .attr('r', 15);
+  
+  node.append('text')
+    .text(d => d.label.length > 20 ? d.label.substring(0, 20) + '...' : d.label)
+    .attr('x', 0)
+    .attr('y', -20)
+    .style('text-anchor', 'middle')
+    .style('font-size', '11px')
+    .style('font-weight', '600')
+    .style('fill', '#2f2f2f');
+  
+  node.append('title')
+    .text(d => d.label);
+  
+  simulation.on('tick', () => {
+    link.attr('d', d => {
+      const dx = d.target.x - d.source.x;
+      const dy = d.target.y - d.source.y;
+      const dr = Math.sqrt(dx * dx + dy * dy);
+      return `M${d.source.x},${d.source.y}A${dr},${dr} 0 0,1 ${d.target.x},${d.target.y}`;
+    });
+    
+    linkLabel
+      .attr('x', d => (d.source.x + d.target.x) / 2)
+      .attr('y', d => (d.source.y + d.target.y) / 2);
+    
+    node.attr('transform', d => `translate(${d.x},${d.y})`);
+  });
+  
+  function dragstarted(event, d) {
+    if (!event.active) simulation.alphaTarget(0.3).restart();
+    d.fx = d.x;
+    d.fy = d.y;
+  }
+  
+  function dragged(event, d) {
+    d.fx = event.x;
+    d.fy = event.y;
+  }
+  
+  function dragended(event, d) {
+    if (!event.active) simulation.alphaTarget(0);
+    d.fx = null;
+    d.fy = null;
+  }
+}
+
+function extractGraphData(vars, rows) {
+  const nodes = new Map();
+  const links = [];
+  
+  // Try to detect subject-predicate-object pattern
+  let subjectVar = vars.find(v => v.toLowerCase().includes('subject') || v.toLowerCase() === 's');
+  let predicateVar = vars.find(v => v.toLowerCase().includes('predicate') || v.toLowerCase() === 'p');
+  let objectVar = vars.find(v => v.toLowerCase().includes('object') || v.toLowerCase() === 'o');
+  
+  // Fallback: use first three variables
+  if (!subjectVar && vars.length >= 2) {
+    subjectVar = vars[0];
+    predicateVar = vars.length >= 3 ? vars[1] : null;
+    objectVar = vars.length >= 2 ? vars[vars.length - 1] : null;
+  }
+  
+  rows.forEach(row => {
+    if (subjectVar && objectVar && row[subjectVar] && row[objectVar]) {
+      const subject = row[subjectVar].value;
+      const object = row[objectVar].value;
+      const predicate = predicateVar && row[predicateVar] ? row[predicateVar].value : 'relates to';
+      
+      const subjectLabel = subject.split('/').pop().split('#').pop();
+      const objectLabel = object.split('/').pop().split('#').pop();
+      const predicateLabel = predicate.split('/').pop().split('#').pop();
+      
+      if (!nodes.has(subject)) {
+        nodes.set(subject, { id: subject, label: subjectLabel });
+      }
+      if (!nodes.has(object)) {
+        nodes.set(object, { id: object, label: objectLabel });
+      }
+      
+      links.push({
+        source: subject,
+        target: object,
+        label: predicateLabel
+      });
+    }
+  });
+  
+  return {
+    nodes: Array.from(nodes.values()),
+    links: links
+  };
+}
+
+// MAP VISUALIZATION
+function renderMap(vars, rows) {
+  const container = document.getElementById('map-container');
+  container.innerHTML = '';
+  
+  const locations = extractLocations(vars, rows);
+  
+  if (locations.length === 0) {
+    container.innerHTML = '<div class="muted" style="padding: 2rem; text-align: center;">' +
+      'No geographic data detected. Map view requires latitude/longitude coordinates or location URIs.<br>' +
+      'Variables should contain: lat/latitude/long/longitude or point/location/geo' +
+      '</div>';
+    return;
+  }
+  
+  const map = L.map(container).setView([locations[0].lat, locations[0].lon], 4);
+  window.currentMap = map;
+  
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors'
+  }).addTo(map);
+  
+  locations.forEach(loc => {
+    const marker = L.marker([loc.lat, loc.lon]).addTo(map);
+    if (loc.label) {
+      marker.bindPopup(loc.label);
+    }
+  });
+  
+  // Fit bounds to show all markers
+  if (locations.length > 1) {
+    const bounds = L.latLngBounds(locations.map(loc => [loc.lat, loc.lon]));
+    map.fitBounds(bounds, { padding: [50, 50] });
+  }
+}
+
+function extractLocations(vars, rows) {
+  const locations = [];
+  
+  const latVar = vars.find(v => v.toLowerCase().includes('lat'));
+  const lonVar = vars.find(v => v.toLowerCase().includes('lon') || v.toLowerCase().includes('long'));
+  const labelVar = vars.find(v => v.toLowerCase().includes('label') || v.toLowerCase().includes('name'));
+  
+  if (latVar && lonVar) {
+    rows.forEach(row => {
+      if (row[latVar] && row[lonVar]) {
+        const lat = parseFloat(row[latVar].value);
+        const lon = parseFloat(row[lonVar].value);
+        
+        if (!isNaN(lat) && !isNaN(lon)) {
+          locations.push({
+            lat: lat,
+            lon: lon,
+            label: labelVar && row[labelVar] ? row[labelVar].value : `${lat}, ${lon}`
+          });
+        }
+      }
+    });
+  }
+  
+  // Also check for WKT POINT format
+  const pointVar = vars.find(v => 
+    v.toLowerCase().includes('point') || 
+    v.toLowerCase().includes('location') ||
+    v.toLowerCase().includes('geo')
+  );
+  
+  if (pointVar && locations.length === 0) {
+    rows.forEach(row => {
+      if (row[pointVar]) {
+        const value = row[pointVar].value;
+        const match = value.match(/POINT\s*\(\s*([-\d.]+)\s+([-\d.]+)\s*\)/i);
+        if (match) {
+          const lon = parseFloat(match[1]);
+          const lat = parseFloat(match[2]);
+          if (!isNaN(lat) && !isNaN(lon)) {
+            locations.push({
+              lat: lat,
+              lon: lon,
+              label: labelVar && row[labelVar] ? row[labelVar].value : value
+            });
+          }
+        }
+      }
+    });
+  }
+  
+  return locations;
+}
+
+// CHART VISUALIZATION
+function renderChart(vars, rows) {
+  const container = document.getElementById('chart-container');
+  container.innerHTML = '';
+  
+  // Detect numeric data
+  const numericVars = findNumericVariables(vars, rows);
+  
+  if (numericVars.length === 0) {
+    container.innerHTML = '<div class="muted" style="padding: 2rem; text-align: center;">' +
+      'No numeric data detected. Chart view requires at least one numeric variable.<br>' +
+      'Try queries with COUNT, SUM, AVG, or numeric properties.' +
+      '</div>';
+    return;
+  }
+  
+  // Simple bar chart for first numeric variable
+  renderBarChart(container, vars, rows, numericVars[0]);
+}
+
+function findNumericVariables(vars, rows) {
+  const numeric = [];
+  
+  vars.forEach(v => {
+    let isNumeric = true;
+    for (let i = 0; i < Math.min(rows.length, 10); i++) {
+      if (rows[i][v]) {
+        const val = rows[i][v].value;
+        if (isNaN(parseFloat(val))) {
+          isNumeric = false;
+          break;
+        }
+      }
+    }
+    if (isNumeric && rows.some(r => r[v])) {
+      numeric.push(v);
+    }
+  });
+  
+  return numeric;
+}
+
+function renderBarChart(container, vars, rows, numericVar) {
+  // Use first non-numeric variable as labels, or row index
+  const labelVar = vars.find(v => v !== numericVar);
+  
+  const data = rows.map((row, idx) => ({
+    label: labelVar && row[labelVar] ? 
+           row[labelVar].value.split('/').pop().split('#').pop() : 
+           `Row ${idx + 1}`,
+    value: row[numericVar] ? parseFloat(row[numericVar].value) : 0
+  }));
+  
+  const width = container.clientWidth || 800;
+  const height = 400;
+  const margin = { top: 20, right: 20, bottom: 80, left: 60 };
+  
+  const svg = d3.select(container)
+    .append('svg')
+    .attr('width', width)
+    .attr('height', height);
+  
+  const x = d3.scaleBand()
+    .domain(data.map(d => d.label))
+    .range([margin.left, width - margin.right])
+    .padding(0.1);
+  
+  const y = d3.scaleLinear()
+    .domain([0, d3.max(data, d => d.value)])
+    .nice()
+    .range([height - margin.bottom, margin.top]);
+  
+  svg.append('g')
+    .selectAll('rect')
+    .data(data)
+    .join('rect')
+    .attr('x', d => x(d.label))
+    .attr('y', d => y(d.value))
+    .attr('height', d => y(0) - y(d.value))
+    .attr('width', x.bandwidth())
+    .attr('fill', '#d4c9b8')
+    .attr('stroke', '#8b7355')
+    .attr('stroke-width', 1)
+    .on('mouseover', function(event, d) {
+      d3.select(this).attr('fill', '#b8a995');
+      showTooltip(event, `<strong>${d.label}</strong><br>${numericVar}: ${d.value}`);
+    })
+    .on('mouseout', function() {
+      d3.select(this).attr('fill', '#d4c9b8');
+      hideTooltip();
+    });
+  
+  svg.append('g')
+    .attr('transform', `translate(0,${height - margin.bottom})`)
+    .call(d3.axisBottom(x))
+    .selectAll('text')
+    .attr('transform', 'rotate(-45)')
+    .style('text-anchor', 'end')
+    .style('font-size', '10px');
+  
+  svg.append('g')
+    .attr('transform', `translate(${margin.left},0)`)
+    .call(d3.axisLeft(y))
+    .style('font-size', '11px');
+  
+  svg.append('text')
+    .attr('transform', 'rotate(-90)')
+    .attr('y', 0 - margin.left)
+    .attr('x', 0 - (height / 2))
+    .attr('dy', '1em')
+    .style('text-anchor', 'middle')
+    .style('font-size', '12px')
+    .text(numericVar);
+}
+
+// Scatter plot for two numeric variables
+function renderScatterPlot(container, vars, rows, numericVars) {
+  const data = rows.map(row => ({
+    x: row[numericVars[0]] ? parseFloat(row[numericVars[0]].value) : null,
+    y: row[numericVars[1]] ? parseFloat(row[numericVars[1]].value) : null
+  })).filter(d => d.x !== null && d.y !== null);
+  
+  const width = container.clientWidth || 800;
+  const height = 400;
+  const margin = { top: 20, right: 20, bottom: 60, left: 60 };
+  
+  const svg = d3.select(container)
+    .append('svg')
+    .attr('width', width)
+    .attr('height', height);
+  
+  const x = d3.scaleLinear()
+    .domain(d3.extent(data, d => d.x))
+    .nice()
+    .range([margin.left, width - margin.right]);
+  
+  const y = d3.scaleLinear()
+    .domain(d3.extent(data, d => d.y))
+    .nice()
+    .range([height - margin.bottom, margin.top]);
+  
+  svg.append('g')
+    .selectAll('circle')
+    .data(data)
+    .join('circle')
+    .attr('cx', d => x(d.x))
+    .attr('cy', d => y(d.y))
+    .attr('r', 5)
+    .attr('fill', '#d4c9b8')
+    .attr('stroke', '#8b7355')
+    .attr('stroke-width', 1)
+    .on('mouseover', function(event, d) {
+      d3.select(this).attr('r', 7).attr('fill', '#b8a995');
+      showTooltip(event, `${numericVars[0]}: ${d.x}<br>${numericVars[1]}: ${d.y}`);
+    })
+    .on('mouseout', function() {
+      d3.select(this).attr('r', 5).attr('fill', '#d4c9b8');
+      hideTooltip();
+    });
+  
+  svg.append('g')
+    .attr('transform', `translate(0,${height - margin.bottom})`)
+    .call(d3.axisBottom(x))
+    .style('font-size', '11px');
+  
+  svg.append('g')
+    .attr('transform', `translate(${margin.left},0)`)
+    .call(d3.axisLeft(y))
+    .style('font-size', '11px');
+  
+  svg.append('text')
+    .attr('transform', `translate(${width / 2},${height - 10})`)
+    .style('text-anchor', 'middle')
+    .style('font-size', '12px')
+    .text(numericVars[0]);
+  
+  svg.append('text')
+    .attr('transform', 'rotate(-90)')
+    .attr('y', 0 - margin.left)
+    .attr('x', 0 - (height / 2))
+    .attr('dy', '1em')
+    .style('text-anchor', 'middle')
+    .style('font-size', '12px')
+    .text(vars[1]);
+}
+
+// TOOLTIP HELPERS
+function showTooltip(event, html) {
+  let tooltip = document.querySelector('.chart-tooltip');
+  if (!tooltip) {
+    tooltip = document.createElement('div');
+    tooltip.className = 'chart-tooltip';
+    document.body.appendChild(tooltip);
+  }
+  tooltip.innerHTML = html;
+  tooltip.style.left = (event.pageX + 10) + 'px';
+  tooltip.style.top = (event.pageY - 28) + 'px';
+  tooltip.style.opacity = 1;
+}
+
+// PATHWAY VISUALIZATION
+function renderPathways(vars, rows) {
+  const container = document.getElementById('pathway-container');
+  container.innerHTML = '';
+
+  const pathwayData = extractPathwayData(vars, rows);
+
+  if (!pathwayData || pathwayData.pathways.length === 0) {
+    container.innerHTML = '<div class="muted" style="padding: 2rem; text-align: center;">' +
+      'No pathway data detected. Pathway view supports:<br>' +
+      '• WikiPathways queries with pathway URIs<br>' +
+      '• Variables containing "pathway", "protein", "gene", "interaction"<br>' +
+      '• Try querying for pathways from WikiPathways endpoint<br><br>' +
+      '<strong>Example query:</strong><br>' +
+      '<code>SELECT ?pathway ?title ?organism WHERE {<br>' +
+      '  ?pathway a wp:Pathway .<br>' +
+      '  ?pathway dc:title ?title .<br>' +
+      '  ?pathway wp:organism ?organism<br>' +
+      '} LIMIT 20</code>' +
+      '</div>';
+    return;
+  }
+
+  if (pathwayData.type === 'pathway-list') {
+    renderPathwayList(container, pathwayData.pathways);
+  } else if (pathwayData.type === 'pathway-network') {
+    renderPathwayNetwork(container, pathwayData);
+  }
+}
+
+function extractPathwayData(vars, rows) {
+  // Check if this looks like a pathway list query
+  const hasPathwayVar = vars.some(v => 
+    v.toLowerCase().includes('pathway') || 
+    v.toLowerCase().includes('pw')
+  );
+  
+  const hasTitleVar = vars.some(v => 
+    v.toLowerCase().includes('title') || 
+    v.toLowerCase().includes('name') ||
+    v.toLowerCase().includes('label')
+  );
+
+  const hasGeneVar = vars.some(v =>
+    v.toLowerCase().includes('gene') ||
+    v.toLowerCase().includes('protein') ||
+    v.toLowerCase().includes('datano')
+  );
+
+  const hasInteractionVar = vars.some(v =>
+    v.toLowerCase().includes('interaction') ||
+    v.toLowerCase().includes('source') ||
+    v.toLowerCase().includes('target')
+  );
+
+  // Pathway list format
+  if (hasPathwayVar && hasTitleVar && !hasInteractionVar) {
+    const pathways = [];
+    const seen = new Set();
+
+    rows.forEach(row => {
+      const pathwayVar = vars.find(v => v.toLowerCase().includes('pathway') || v.toLowerCase().includes('pw'));
+      const titleVar = vars.find(v => v.toLowerCase().includes('title') || v.toLowerCase().includes('name') || v.toLowerCase().includes('label'));
+      const organismVar = vars.find(v => v.toLowerCase().includes('organism') || v.toLowerCase().includes('species'));
+      const descVar = vars.find(v => v.toLowerCase().includes('description') || v.toLowerCase().includes('desc'));
+
+      if (pathwayVar && row[pathwayVar]) {
+        const pathwayUri = row[pathwayVar].value;
+        if (seen.has(pathwayUri)) return;
+        seen.add(pathwayUri);
+
+        const pathwayId = pathwayUri.split('/').pop();
+        
+        pathways.push({
+          uri: pathwayUri,
+          id: pathwayId,
+          title: titleVar && row[titleVar] ? row[titleVar].value : pathwayId,
+          organism: organismVar && row[organismVar] ? row[organismVar].value : 'Unknown',
+          description: descVar && row[descVar] ? row[descVar].value : '',
+          imageUrl: `https://www.wikipathways.org/index.php/Pathway:${pathwayId}?action=render`
+        });
+      }
+    });
+
+    return { type: 'pathway-list', pathways };
+  }
+
+  // Pathway network format (genes/proteins with interactions)
+  if (hasGeneVar || hasInteractionVar) {
+    const nodes = new Map();
+    const links = [];
+
+    rows.forEach(row => {
+      const sourceVar = vars.find(v => 
+        v.toLowerCase().includes('source') || 
+        v.toLowerCase().includes('gene') || 
+        v.toLowerCase().includes('protein') ||
+        v === vars[0]
+      );
+      const targetVar = vars.find(v => 
+        v.toLowerCase().includes('target') || 
+        v.toLowerCase().includes('interact') ||
+        (v !== sourceVar && (v.toLowerCase().includes('gene') || v.toLowerCase().includes('protein')))
+      );
+
+      if (sourceVar && targetVar && row[sourceVar] && row[targetVar]) {
+        const source = row[sourceVar].value;
+        const target = row[targetVar].value;
+
+        const sourceLabel = source.split('/').pop().split('#').pop();
+        const targetLabel = target.split('/').pop().split('#').pop();
+
+        if (!nodes.has(source)) {
+          nodes.set(source, { id: source, label: sourceLabel, type: 'gene' });
+        }
+        if (!nodes.has(target)) {
+          nodes.set(target, { id: target, label: targetLabel, type: 'gene' });
+        }
+
+        links.push({ source, target });
+      }
+    });
+
+    if (nodes.size > 0) {
+      return {
+        type: 'pathway-network',
+        pathways: [],
+        nodes: Array.from(nodes.values()),
+        links
+      };
+    }
+  }
+
+  return null;
+}
+
+function renderPathwayList(container, pathways) {
+  const gridHtml = '<div class="pathway-grid">' +
+    pathways.map(pw => `
+      <div class="pathway-card" onclick="openPathwayDetail('${pw.uri}', '${pw.id}')">
+        <div class="pathway-title">${escapeHtml(pw.title)}</div>
+        <div class="pathway-meta">
+          <strong>ID:</strong> ${pw.id}<br>
+          <strong>Organism:</strong> ${escapeHtml(pw.organism)}
+        </div>
+        ${pw.description ? `<div class="pathway-description">${escapeHtml(pw.description.substring(0, 150))}${pw.description.length > 150 ? '...' : ''}</div>` : ''}
+      </div>
+    `).join('') +
+    '</div>';
+
+  container.innerHTML = gridHtml;
+}
+
+function renderPathwayNetwork(container, data) {
+  container.innerHTML = '<div class="pathway-network" id="pathway-network-graph"></div>';
+  
+  const networkContainer = document.getElementById('pathway-network-graph');
+  const width = networkContainer.clientWidth || 800;
+  const height = 500;
+
+  const svg = d3.select(networkContainer)
+    .append('svg')
+    .attr('width', width)
+    .attr('height', height);
+
+  // Add arrow marker for directed edges
+  svg.append('defs').append('marker')
+    .attr('id', 'arrow')
+    .attr('viewBox', '0 -5 10 10')
+    .attr('refX', 20)
+    .attr('refY', 0)
+    .attr('markerWidth', 6)
+    .attr('markerHeight', 6)
+    .attr('orient', 'auto')
+    .append('path')
+    .attr('d', 'M0,-5L10,0L0,5')
+    .attr('fill', '#999');
+
+  const simulation = d3.forceSimulation(data.nodes)
+    .force('link', d3.forceLink(data.links).id(d => d.id).distance(100))
+    .force('charge', d3.forceManyBody().strength(-300))
+    .force('center', d3.forceCenter(width / 2, height / 2))
+    .force('collision', d3.forceCollide().radius(40));
+
+  const link = svg.append('g')
+    .selectAll('line')
+    .data(data.links)
+    .join('line')
+    .attr('class', 'pathway-link')
+    .attr('stroke-width', 2);
+
+  const node = svg.append('g')
+    .selectAll('g')
+    .data(data.nodes)
+    .join('g')
+    .attr('class', 'pathway-node')
+    .call(d3.drag()
+      .on('start', dragstarted)
+      .on('drag', dragged)
+      .on('end', dragended));
+
+  node.append('circle')
+    .attr('r', 10)
+    .attr('fill', d => d.type === 'gene' ? '#8b7355' : '#7c4a59');
+
+  node.append('text')
+    .text(d => d.label.length > 15 ? d.label.substring(0, 15) + '...' : d.label)
+    .attr('x', 15)
+    .attr('y', 4)
+    .style('font-size', '10px')
+    .style('pointer-events', 'none');
+
+  node.append('title')
+    .text(d => d.label);
+
+  simulation.on('tick', () => {
+    link
+      .attr('x1', d => d.source.x)
+      .attr('y1', d => d.source.y)
+      .attr('x2', d => d.target.x)
+      .attr('y2', d => d.target.y);
+
+    node.attr('transform', d => `translate(${d.x},${d.y})`);
+  });
+
+  function dragstarted(event, d) {
+    if (!event.active) simulation.alphaTarget(0.3).restart();
+    d.fx = d.x;
+    d.fy = d.y;
+  }
+
+  function dragged(event, d) {
+    d.fx = event.x;
+    d.fy = event.y;
+  }
+
+  function dragended(event, d) {
+    if (!event.active) simulation.alphaTarget(0);
+    d.fx = null;
+    d.fy = null;
+  }
+}
+
+function openPathwayDetail(uri, id) {
+  // Open WikiPathways page in new tab
+  const wikipathwaysUrl = `https://www.wikipathways.org/pathways/${id}.html`;
+  window.open(wikipathwaysUrl, '_blank');
+}
+
+// TIMELINE VISUALIZATION
+function renderTimeline(vars, rows) {
+  const container = document.getElementById('timeline-container');
+  container.innerHTML = '';
+  
+  const timelineData = extractTimelineData(vars, rows);
+  
+  if (timelineData.length === 0) {
+    container.innerHTML = '<div class="muted" style="padding: 2rem; text-align: center;">' +
+      'No temporal data detected. Timeline view requires date/time variables.<br>' +
+      'Variables should contain: date, time, year, created, modified, or timestamp' +
+      '</div>';
+    return;
+  }
+  
+  // Sort by date
+  timelineData.sort((a, b) => a.date - b.date);
+  
+  let html = '';
+  timelineData.forEach(item => {
+    html += `
+      <div class="timeline-item">
+        <div class="timeline-date">${item.dateStr}</div>
+        <div class="timeline-content">${item.content}</div>
+      </div>
+    `;
+  });
+  
+  container.innerHTML = html;
+}
+
+function extractTimelineData(vars, rows) {
+  const timeline = [];
+  
+  const dateVar = vars.find(v => 
+    v.toLowerCase().includes('date') ||
+    v.toLowerCase().includes('time') ||
+    v.toLowerCase().includes('year') ||
+    v.toLowerCase().includes('created') ||
+    v.toLowerCase().includes('modified')
+  );
+  
+  if (!dateVar) return [];
+  
+  const contentVars = vars.filter(v => v !== dateVar);
+  
+  rows.forEach(row => {
+    if (row[dateVar]) {
+      const dateValue = row[dateVar].value;
+      const date = new Date(dateValue);
+      
+      if (!isNaN(date.getTime())) {
+        const content = contentVars
+          .map(v => row[v] ? `${v}: ${row[v].value}` : '')
+          .filter(Boolean)
+          .join(', ');
+        
+        timeline.push({
+          date: date,
+          dateStr: date.toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+          }),
+          content: content || dateValue
+        });
+      }
+    }
+  });
+  
+  return timeline;
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function hideTooltip() {
+  const tooltip = document.querySelector('.chart-tooltip');
+  if (tooltip) {
+    tooltip.style.opacity = 0;
+  }
+}
+
+function clearQuery() {
+  document.getElementById('query').value = '';
+  document.getElementById('viz-tabs').style.display = 'none';
+  document.getElementById('results').style.display = 'block';
+  document.getElementById('results').innerHTML = 
+    '<div class="muted">Query cleared. Enter a new query and click Run Query.</div>';
+}
+
+function loadExample() {
+  document.getElementById('query').value =
+`PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+SELECT DISTINCT ?subject ?predicate ?object
+WHERE {
+  ?subject ?predicate ?object
+}
+LIMIT 10`;
+  document.getElementById('viz-tabs').style.display = 'none';
+  document.getElementById('results').style.display = 'block';
+  document.getElementById('results').innerHTML =
+    '<div class="muted">Example query loaded. Click Run Query to execute.</div>';
+}
+
+// ── Shared Examples Browser (reads from IndexedDB) ──
+const EXAMPLES_DB_NAME = 'sparql-examples-harvest';
+const EXAMPLES_DB_VERSION = 1;
+const EXAMPLES_STORE = 'harvested';
+let storedExamples = [];
+let filteredStoredExamples = [];
+
+function openExamplesDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(EXAMPLES_DB_NAME, EXAMPLES_DB_VERSION);
+    req.onupgradeneeded = () => req.result.createObjectStore(EXAMPLES_STORE);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function getStoredExamples() {
+  const db = await openExamplesDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(EXAMPLES_STORE, 'readonly');
+    const r = tx.objectStore(EXAMPLES_STORE).get('examples');
+    r.onsuccess = () => resolve(r.result);
+    r.onerror = () => reject(r.error);
+  });
+}
+
+async function openExamplesBrowser() {
+  const panel = document.getElementById('examples-panel');
+  const list = document.getElementById('examples-list');
+  const count = document.getElementById('examples-count');
+  try {
+    const data = await getStoredExamples();
+    if (!data || !data.examples || data.examples.length === 0) {
+      count.textContent = 'No examples loaded';
+      list.innerHTML = '<div style="padding:2rem; text-align:center; color:var(--text-muted);">No examples available yet.<br><br>Visit <a href="examples.html" style="color:var(--accent-dark);">Examples Browser</a> to load SPARQL examples from GitHub.</div>';
+      panel.style.display = 'block';
+      return;
+    }
+    storedExamples = data.examples;
+    filteredStoredExamples = storedExamples;
+    count.textContent = storedExamples.length + ' examples available (updated ' + new Date(data.meta.lastUpdated).toLocaleDateString() + ')';
+    renderStoredExamples();
+    panel.style.display = 'block';
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (err) {
+    list.innerHTML = '<div class="error">Error loading examples: ' + err.message + '</div>';
+    panel.style.display = 'block';
+  }
+}
+
+function closeExamplesBrowser() {
+  document.getElementById('examples-panel').style.display = 'none';
+  document.getElementById('examples-filter').value = '';
+}
+
+function filterStoredExamples() {
+  const f = document.getElementById('examples-filter').value.toLowerCase();
+  filteredStoredExamples = f ? storedExamples.filter(ex => (ex.title + ' ' + ex.description + ' ' + ex.id + ' ' + ex.tags.join(' ') + ' ' + ex.endpoints.join(' ')).toLowerCase().includes(f)) : storedExamples;
+  renderStoredExamples();
+}
+
+function renderStoredExamples() {
+  const list = document.getElementById('examples-list');
+  if (filteredStoredExamples.length === 0) { list.innerHTML = '<div style="padding:1rem; text-align:center; color:var(--text-muted);">No examples match your filter.</div>'; return; }
+  const DISPLAY_LIMIT = 500;
+  list.innerHTML = filteredStoredExamples.slice(0, DISPLAY_LIMIT).map((ex, i) => {
+    const epBadges = ex.endpoints.map(ep => { try { return '<span style="background:var(--accent-soft);color:var(--accent-dark);padding:0.15rem 0.4rem;border-radius:3px;font-size:0.72rem;margin-right:0.25rem;">' + new URL(ep).hostname.replace('www.','') + '</span>'; } catch(e) { return ''; } }).join('');
+    return '<div style="padding:0.75rem;border:1px solid var(--border-soft);border-radius:4px;margin-bottom:0.5rem;cursor:pointer;transition:border-color 0.2s;" onmouseover="this.style.borderColor=\'var(--accent-dark)\'" onmouseout="this.style.borderColor=\'var(--border-soft)\'" onclick="selectStoredExample(' + i + ')">'
+      + '<div style="font-weight:600;color:var(--accent-dark);font-size:0.92rem;margin-bottom:0.2rem;">' + escHtml(ex.title) + '</div>'
+      + '<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:0.4rem;">' + escHtml(ex.id.split('/').pop()) + (ex.repo ? ' &bull; ' + escHtml(ex.repo.owner || ex.repo.full_name || '') : '') + '</div>'
+      + (epBadges ? '<div style="margin-bottom:0.3rem;">' + epBadges + '</div>' : '')
+      + (ex.tags.length ? '<div style="font-size:0.72rem;color:var(--text-muted);">' + ex.tags.join(', ') + '</div>' : '')
+      + '</div>';
+  }).join('') + (filteredStoredExamples.length > DISPLAY_LIMIT ? '<div style="padding:0.5rem;text-align:center;color:var(--text-muted);font-size:0.85rem;">Showing ' + DISPLAY_LIMIT + ' of ' + filteredStoredExamples.length + ' — use filter to narrow down.</div>' : '');
+}
+
+function selectStoredExample(idx) {
+  const ex = filteredStoredExamples[idx];
+  if (!ex) return;
+  document.getElementById('query').value = ex.query;
+  attemptEndpointSwitch(ex.endpoints);
+  closeExamplesBrowser();
+  document.getElementById('results').innerHTML = '<div class="muted">Example loaded: <strong>' + escHtml(ex.title) + '</strong>. Click Run Query to execute.</div>';
+  document.getElementById('query').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function attemptEndpointSwitch(exEndpoints) {
+  if (!exEndpoints || exEndpoints.length === 0) return;
+  const select = document.getElementById('endpoint-select');
+  if (!select || typeof endpoints === 'undefined') return;
+  for (const exEp of exEndpoints) {
+    let hostname; try { hostname = new URL(exEp).hostname; } catch(e) { continue; }
+    if (Array.isArray(endpoints)) {
+      const match = endpoints.find(ep => ep.url === exEp || ep.url.includes(hostname));
+      if (match) { select.value = match.id; if (typeof switchEndpoint === 'function') switchEndpoint(); return; }
+    } else {
+      for (const [key, ep] of Object.entries(endpoints)) {
+        if (ep.url === exEp || ep.url.includes(hostname)) { select.value = key; if (typeof switchEndpoint === 'function') switchEndpoint(); return; }
+      }
+    }
+  }
+}
+
+function escHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+</script>
+
+</body>
+</html>

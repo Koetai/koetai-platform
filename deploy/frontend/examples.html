@@ -1,0 +1,1567 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Koetai SPARQL Examples Browser</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <style>
+    :root {
+      --bg-main: #f7f6f3;
+      --bg-panel: #ffffff;
+      --accent-soft: #d4c9b8;
+      --accent-dark: #8b7355;
+      --accent-hover: #6b5844;
+      --text-main: #2f2f2f;
+      --text-muted: #6f6f6f;
+      --border-soft: #e3e3df;
+      --success-bg: #f5f2ed;
+      --error-bg: #fff5f5;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+                   Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg-main);
+      color: var(--text-main);
+      line-height: 1.6;
+    }
+
+    h1, h2 {
+      font-family: Georgia, "Times New Roman", serif;
+      font-weight: 500;
+    }
+
+    header {
+      padding: 3rem 2rem;
+      background: linear-gradient(to bottom, #f5f2ed 0%, #e8e3d9 100%);
+      border-bottom: 2px solid var(--accent-soft);
+      position: relative;
+      overflow: hidden;
+    }
+
+    header::before {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, #a39582, transparent);
+      opacity: 0.4;
+    }
+
+    header h1 {
+      margin: 0 0 0.5rem 0;
+      font-size: 2.3rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      color: var(--accent-dark);
+    }
+
+    header h1::before {
+      content: "";
+      display: inline-block;
+      width: 48px;
+      height: 48px;
+      background-image: url('koetai-icon.png');
+      background-size: contain;
+      background-repeat: no-repeat;
+      background-position: center;
+      flex-shrink: 0;
+    }
+
+    header p {
+      margin: 0;
+      color: var(--text-muted);
+      max-width: 48rem;
+      font-style: italic;
+    }
+
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 2rem;
+      display: grid;
+      gap: 2rem;
+    }
+
+    .panel {
+      background: var(--bg-panel);
+      padding: 1.5rem;
+      border-radius: 6px;
+      border: 1px solid var(--border-soft);
+    }
+
+    .panel h2 {
+      margin-top: 0;
+      font-size: 1.4rem;
+    }
+
+    .form-row {
+      margin-bottom: 1rem;
+    }
+
+    .form-row label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      font-size: 0.9rem;
+    }
+
+    .form-row select,
+    .form-row input {
+      width: 100%;
+      padding: 0.6rem;
+      border: 1px solid var(--border-soft);
+      border-radius: 4px;
+      font-size: 0.9rem;
+      background: #fff;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 1rem;
+      flex-wrap: wrap;
+    }
+
+    button {
+      padding: 0.6rem 1.2rem;
+      font-size: 0.9rem;
+      background: var(--accent-dark);
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: var(--accent-hover);
+    }
+
+    button.secondary {
+      background: #f5f5f5;
+      color: var(--text-main);
+      border: 1px solid var(--border-soft);
+    }
+
+    button.secondary:hover {
+      background: #e8e8e8;
+    }
+
+    .example-list {
+      display: grid;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    .example-item {
+      padding: 1rem;
+      border: 1px solid var(--border-soft);
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .example-item:hover {
+      border-color: var(--accent-dark);
+      box-shadow: 0 2px 8px rgba(139, 115, 85, 0.2);
+    }
+
+    .example-item.selected {
+      border-color: var(--accent-dark);
+      border-width: 2px;
+      background: var(--success-bg);
+    }
+
+    .example-title {
+      font-weight: 600;
+      color: var(--accent-dark);
+      font-size: 1rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .example-meta {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+    }
+
+    .example-description {
+      font-size: 0.85rem;
+      color: var(--text-main);
+      line-height: 1.4;
+    }
+
+    .endpoint-badges {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-top: 0.5rem;
+    }
+
+    .endpoint-badge {
+      background: var(--accent-soft);
+      color: var(--accent-dark);
+      padding: 0.2rem 0.5rem;
+      border-radius: 3px;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+
+    .endpoint-list {
+      display: grid;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+
+    .endpoint-card {
+      border: 1px solid var(--border-soft);
+      border-radius: 6px;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+
+    .endpoint-card.active {
+      border-color: var(--accent-dark);
+      box-shadow: 0 2px 12px rgba(139, 115, 85, 0.15);
+    }
+
+    .endpoint-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem 1rem;
+      cursor: pointer;
+      background: #fafaf9;
+      user-select: none;
+      transition: background 0.15s;
+    }
+
+    .endpoint-card-header:hover {
+      background: var(--success-bg);
+    }
+
+    .endpoint-card-header .ep-name {
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: var(--accent-dark);
+    }
+
+    .endpoint-card-header .ep-url {
+      font-family: monospace;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      word-break: break-all;
+      margin-top: 0.15rem;
+    }
+
+    .endpoint-card-header .ep-right {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-shrink: 0;
+      margin-left: 1rem;
+    }
+
+    .endpoint-card-header .ep-count {
+      background: var(--accent-soft);
+      color: var(--accent-dark);
+      padding: 0.2rem 0.6rem;
+      border-radius: 3px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .endpoint-card-header .ep-chevron {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      transition: transform 0.2s;
+    }
+
+    .endpoint-card.active .ep-chevron {
+      transform: rotate(90deg);
+    }
+
+    .endpoint-card-body {
+      display: none;
+      border-top: 1px solid var(--border-soft);
+    }
+
+    .endpoint-card.active .endpoint-card-body {
+      display: block;
+    }
+
+    .ep-example-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 0.6rem 1rem;
+      border-bottom: 1px solid #f0efec;
+      cursor: pointer;
+      transition: background 0.15s;
+      font-size: 0.88rem;
+    }
+
+    .ep-example-row:last-child {
+      border-bottom: none;
+    }
+
+    .ep-example-row:hover {
+      background: #f7f6f3;
+    }
+
+    .ep-example-row.selected {
+      background: var(--success-bg);
+    }
+
+    .ep-example-row .ep-ex-id {
+      font-family: monospace;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      flex-shrink: 0;
+      min-width: 5rem;
+      padding-top: 0.1rem;
+    }
+
+    .ep-example-row .ep-ex-title {
+      color: var(--text-main);
+      flex: 1;
+      line-height: 1.4;
+    }
+
+    .ep-example-row .ep-ex-repo {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      background: #f0efec;
+      padding: 0.1rem 0.4rem;
+      border-radius: 3px;
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+
+    .example-detail-inline {
+      background: #fafaf9;
+      border-top: 1px solid var(--border-soft);
+      padding: 1.25rem;
+    }
+
+    .example-detail-inline h3 {
+      margin: 0 0 0.5rem 0;
+      font-size: 1.05rem;
+      font-family: Georgia, "Times New Roman", serif;
+      color: var(--accent-dark);
+    }
+
+    .example-detail-inline .detail-meta {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      margin-bottom: 0.75rem;
+    }
+
+    .example-detail-inline .detail-desc {
+      font-size: 0.9rem;
+      line-height: 1.5;
+      margin-bottom: 1rem;
+    }
+
+    .example-detail-inline .detail-actions {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .example-detail-inline .detail-actions button {
+      font-size: 0.82rem;
+      padding: 0.4rem 0.9rem;
+    }
+
+    .setup-bar {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .setup-bar select {
+      flex: 1;
+      min-width: 200px;
+      padding: 0.5rem;
+      border: 1px solid var(--border-soft);
+      border-radius: 4px;
+      font-size: 0.85rem;
+      background: #fff;
+    }
+
+    .setup-bar button {
+      font-size: 0.82rem;
+      padding: 0.45rem 0.9rem;
+      white-space: nowrap;
+    }
+
+    .panel-collapsible-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .panel-collapsible-header .collapse-chevron {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      transition: transform 0.2s;
+    }
+
+    .panel-collapsible-body.collapsed {
+      display: none;
+    }
+
+    .query-preview {
+      background: #fafafa;
+      border: 1px solid var(--border-soft);
+      border-radius: 4px;
+      padding: 0.75rem;
+      font-family: monospace;
+      font-size: 0.8rem;
+      max-height: 200px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      margin-top: 0.75rem;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 2rem;
+      color: var(--text-muted);
+    }
+
+    .loading::after {
+      content: "...";
+      animation: dots 1.5s steps(4, end) infinite;
+    }
+
+    @keyframes dots {
+      0%, 20% { content: "."; }
+      40% { content: ".."; }
+      60%, 100% { content: "..."; }
+    }
+
+    .error {
+      background: var(--error-bg);
+      color: #c53030;
+      padding: 1rem;
+      border-radius: 4px;
+      margin-top: 1rem;
+    }
+
+    .success {
+      background: var(--success-bg);
+      color: var(--accent-dark);
+      padding: 1rem;
+      border-radius: 4px;
+      margin-top: 1rem;
+    }
+
+    .stats {
+      background: var(--success-bg);
+      padding: 0.75rem;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      margin-bottom: 1rem;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .filter-box {
+      margin-bottom: 1rem;
+    }
+
+    .filter-box input {
+      width: 100%;
+      padding: 0.5rem;
+      border: 1px solid var(--border-soft);
+      border-radius: 4px;
+      font-size: 0.9rem;
+    }
+
+    .harvest-progress {
+      margin-top: 1rem;
+      font-size: 0.85rem;
+    }
+
+    .harvest-progress .progress-bar {
+      width: 100%;
+      height: 8px;
+      background: var(--border-soft);
+      border-radius: 4px;
+      overflow: hidden;
+      margin: 0.5rem 0;
+    }
+
+    .harvest-progress .progress-fill {
+      height: 100%;
+      background: var(--accent-dark);
+      border-radius: 4px;
+      transition: width 0.3s;
+    }
+
+    .harvest-log {
+      max-height: 200px;
+      overflow-y: auto;
+      font-size: 0.8rem;
+      font-family: monospace;
+      background: #fafafa;
+      border: 1px solid var(--border-soft);
+      border-radius: 4px;
+      padding: 0.5rem;
+      margin-top: 0.5rem;
+      line-height: 1.4;
+    }
+
+    .harvest-log .log-ok { color: var(--accent-dark); }
+    .harvest-log .log-err { color: #c53030; }
+    .harvest-log .log-info { color: var(--text-muted); }
+
+    .stored-info {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      background: var(--success-bg);
+      padding: 0.75rem;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      margin-bottom: 1rem;
+    }
+
+    .stored-info .stored-meta {
+      color: var(--text-muted);
+      font-size: 0.8rem;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    @media (max-width: 768px) {
+      header {
+        padding: 2rem 1rem;
+      }
+
+      header h1 {
+        font-size: 1.8rem;
+      }
+
+      main {
+        padding: 1rem;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+<header>
+  <h1>Koetai SPARQL Examples Browser</h1>
+  <p>
+    Explore curated SPARQL query examples from multiple institutes.
+    Tracing the ancient waterways of linked data.
+  </p>
+</header>
+
+<main>
+
+  <!-- Setup Bar: Repo selection + Harvest (collapsed by default) -->
+  <section class="panel">
+    <div class="panel-collapsible-header" onclick="toggleSetup()">
+      <h2 style="margin:0; font-size:1.1rem;">Setup &amp; Harvest</h2>
+      <span class="collapse-chevron" id="setup-chevron">&#9654;</span>
+    </div>
+    <div class="panel-collapsible-body collapsed" id="setup-body">
+      <div style="margin-top:1rem;">
+        <div class="stats" id="repo-stats">
+          <span>Loading forks from GitHub...</span>
+        </div>
+        <div class="setup-bar">
+          <select id="repo-select" onchange="loadExamples()">
+            <option value="">Loading repositories...</option>
+          </select>
+          <button id="btn-load-all" onclick="loadAllExamples()" disabled>Load all repos</button>
+        </div>
+        <div style="margin-top:1rem; padding-top:1rem; border-top:1px solid var(--border-soft);">
+          <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.5rem;">
+            Harvest all TTL files from every sparql-examples fork for local indexing.
+          </div>
+          <div id="harvest-stored"></div>
+          <div class="button-group">
+            <button id="btn-harvest" onclick="harvestAll()" disabled>Harvest all instances</button>
+            <button id="btn-download" class="secondary" onclick="downloadStoredTTL()" style="display:none;">Download TTL</button>
+            <button id="btn-clear" class="secondary" onclick="clearStoredTTL()" style="display:none;">Clear</button>
+          </div>
+          <div id="harvest-progress"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Endpoints Panel (primary navigation) -->
+  <section class="panel" id="endpoints-panel" style="display: none;">
+    <h2 style="margin-bottom:0.25rem;">Endpoints &amp; Examples</h2>
+    <p style="margin-top:0; font-size:0.85rem; color:var(--text-muted);">
+      Click an endpoint to browse its queries. <span id="endpoints-summary"></span>
+    </p>
+    <div class="filter-box">
+      <input
+        type="text"
+        id="example-filter"
+        placeholder="Filter by title, description, endpoint, or tag..."
+        oninput="filterExamples()"
+      />
+    </div>
+    <div id="endpoints-list-container"></div>
+  </section>
+
+  <!-- Loading / status container (shown before endpoints load) -->
+  <section class="panel" id="loading-panel">
+    <div id="examples-container">
+      <div class="loading">Select a repository or click "Load all repos" in Setup above</div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+// ── State ──
+let allForks = [];
+let currentRepo = { owner: 'sib-swiss', repo: 'sparql-examples' };
+let allExamples = [];
+let filteredExamples = [];
+let selectedExample = null;
+let harvestAbort = null; // AbortController for cancelling harvest
+
+const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours — examples are re-fetched if older
+
+// ── IndexedDB helpers ──
+const DB_NAME = 'sparql-examples-harvest';
+const DB_VERSION = 1;
+const STORE_NAME = 'harvested';
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = () => {
+      req.result.createObjectStore(STORE_NAME);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function dbPut(key, value) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).put(value, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function dbGet(key) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const req = tx.objectStore(STORE_NAME).get(key);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function dbDelete(key) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).delete(key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+// ── Initialize ──
+document.addEventListener('DOMContentLoaded', async function() {
+  await showStoredStatus();
+  await loadForks();
+  const fromCache = await loadCachedExamples();
+  if (!fromCache) {
+    await loadAllExamples();
+  }
+});
+
+// ── Stored data status ──
+async function showStoredStatus() {
+  const container = document.getElementById('harvest-stored');
+  const btnDownload = document.getElementById('btn-download');
+  const btnClear = document.getElementById('btn-clear');
+  try {
+    const meta = await dbGet('meta');
+    if (meta) {
+      container.innerHTML = `
+        <div class="stored-info">
+          <div>
+            <strong>Stored harvest:</strong> ${meta.totalFiles} TTL files
+            from ${meta.reposHarvested} repositories
+            (${formatBytes(meta.totalSize)})
+            <div class="stored-meta">
+              Harvested on ${new Date(meta.date).toLocaleString()}
+            </div>
+          </div>
+        </div>`;
+      btnDownload.style.display = '';
+      btnClear.style.display = '';
+    } else {
+      container.innerHTML = `<div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.5rem;">No stored harvest yet.</div>`;
+      btnDownload.style.display = 'none';
+      btnClear.style.display = 'none';
+    }
+  } catch (e) {
+    console.error('IndexedDB error:', e);
+    container.innerHTML = '';
+  }
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+// ── Harvest all instances ──
+async function harvestAll() {
+  const btn = document.getElementById('btn-harvest');
+  const progressEl = document.getElementById('harvest-progress');
+
+  if (allForks.length === 0) {
+    progressEl.innerHTML = '<div class="error">No repositories loaded yet. Wait for the fork list to load.</div>';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Harvesting...';
+  harvestAbort = new AbortController();
+
+  const log = [];
+  function addLog(msg, cls = 'log-info') {
+    log.push({ msg, cls });
+    renderProgress();
+  }
+
+  let totalFiles = 0;
+  let totalSize = 0;
+  let reposHarvested = 0;
+  let reposDone = 0;
+  const reposTotal = allForks.length;
+  const allTTLParts = [];
+
+  // Add provenance prefixes at the top
+  allTTLParts.push(`@prefix prov: <http://www.w3.org/ns/prov#> .`);
+  allTTLParts.push(`@prefix dcterms: <http://purl.org/dc/terms/> .`);
+  allTTLParts.push(`@prefix schema: <https://schema.org/> .`);
+  allTTLParts.push(`@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .`);
+  allTTLParts.push('');
+
+  function renderProgress() {
+    const pct = reposTotal > 0 ? Math.round((reposDone / reposTotal) * 100) : 0;
+    progressEl.innerHTML = `
+      <div class="harvest-progress">
+        <div>Repository ${reposDone} / ${reposTotal} &mdash; ${totalFiles} TTL files collected (${formatBytes(totalSize)})</div>
+        <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+        <div class="harvest-log">${log.map(l => `<div class="${l.cls}">${escapeHtml(l.msg)}</div>`).join('')}</div>
+      </div>`;
+    // Auto-scroll log
+    const logEl = progressEl.querySelector('.harvest-log');
+    if (logEl) logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  renderProgress();
+
+  for (const fork of allForks) {
+    if (harvestAbort.signal.aborted) break;
+
+    addLog(`[${fork.full_name}] Fetching file tree...`);
+
+    try {
+      // Use Trees API to list all files in one call
+      const treeUrl = `https://api.github.com/repos/${fork.owner}/${fork.repo}/git/trees/main?recursive=1`;
+      const treeResp = await fetch(treeUrl, {
+        headers: { 'Accept': 'application/vnd.github.v3+json' },
+        signal: harvestAbort.signal
+      });
+
+      if (!treeResp.ok) {
+        // Try 'master' branch as fallback
+        const treeMaster = await fetch(
+          `https://api.github.com/repos/${fork.owner}/${fork.repo}/git/trees/master?recursive=1`,
+          { headers: { 'Accept': 'application/vnd.github.v3+json' }, signal: harvestAbort.signal }
+        );
+        if (!treeMaster.ok) {
+          addLog(`[${fork.full_name}] Skipped: no main/master branch (${treeResp.status})`, 'log-err');
+          reposDone++;
+          renderProgress();
+          continue;
+        }
+        var tree = await treeMaster.json();
+        var branch = 'master';
+      } else {
+        var tree = await treeResp.json();
+        var branch = 'main';
+      }
+
+      // Filter for .ttl files under examples/
+      const ttlFiles = (tree.tree || []).filter(f =>
+        f.type === 'blob' && f.path.startsWith('examples/') && f.path.endsWith('.ttl')
+      );
+
+      if (ttlFiles.length === 0) {
+        addLog(`[${fork.full_name}] No TTL files found in examples/`, 'log-info');
+        reposDone++;
+        renderProgress();
+        continue;
+      }
+
+      addLog(`[${fork.full_name}] Found ${ttlFiles.length} TTL files, fetching...`);
+
+      // Add a comment header for this repo
+      allTTLParts.push(`# ============================================================`);
+      allTTLParts.push(`# Repository: ${fork.full_name}`);
+      allTTLParts.push(`# Branch: ${branch}`);
+      allTTLParts.push(`# Harvested: ${new Date().toISOString()}`);
+      allTTLParts.push(`# ============================================================\n`);
+
+      // Fetch TTL files in batches of 10
+      const batchSize = 10;
+      let repoFileCount = 0;
+      const harvestTimestamp = new Date().toISOString();
+      for (let i = 0; i < ttlFiles.length; i += batchSize) {
+        if (harvestAbort.signal.aborted) break;
+        const batch = ttlFiles.slice(i, i + batchSize);
+        const results = await Promise.all(batch.map(async f => {
+          try {
+            const rawUrl = `https://raw.githubusercontent.com/${fork.owner}/${fork.repo}/${branch}/${f.path}`;
+            const resp = await fetch(rawUrl, { signal: harvestAbort.signal });
+            if (!resp.ok) return null;
+            const content = await resp.text();
+            const githubUrl = `https://github.com/${fork.owner}/${fork.repo}/blob/${branch}/${f.path}`;
+            return { content, rawUrl, githubUrl };
+          } catch { return null; }
+        }));
+
+        for (const result of results) {
+          if (result) {
+            // Strip @prefix lines that would clash with top-level provenance prefixes
+            const contentLines = result.content.split('\n');
+            const stripped = contentLines.filter(line => {
+              const trimmed = line.trim().toLowerCase();
+              return !(trimmed.startsWith('@prefix prov:') ||
+                       trimmed.startsWith('@prefix dcterms:') ||
+                       (trimmed.startsWith('@prefix xsd:') && trimmed.includes('XMLSchema')));
+            }).join('\n');
+
+            allTTLParts.push(stripped);
+
+            // Extract subject URI and add provenance triples
+            const subjectMatch = result.content.match(/^(?:@prefix[^.]*\.\s*)*\s*(<[^>]+>)\s/m)
+                              || result.content.match(/\n(<[^>]+>)\s+a\s+/);
+            if (subjectMatch) {
+              const subjectURI = subjectMatch[1];
+              allTTLParts.push('');
+              allTTLParts.push(`# Provenance for ${subjectURI}`);
+              allTTLParts.push(`${subjectURI} prov:wasDerivedFrom <${result.githubUrl}> .`);
+              allTTLParts.push(`${subjectURI} dcterms:source <https://github.com/${fork.owner}/${fork.repo}> .`);
+              allTTLParts.push(`${subjectURI} schema:dateModified "${harvestTimestamp}"^^xsd:dateTime .`);
+            }
+
+            allTTLParts.push(''); // blank line separator
+            totalSize += result.content.length;
+            totalFiles++;
+            repoFileCount++;
+          }
+        }
+      }
+
+      addLog(`[${fork.full_name}] Collected ${repoFileCount} TTL files`, 'log-ok');
+      reposHarvested++;
+
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        addLog('Harvest cancelled.', 'log-err');
+        break;
+      }
+      addLog(`[${fork.full_name}] Error: ${err.message}`, 'log-err');
+    }
+
+    reposDone++;
+    renderProgress();
+  }
+
+  // Concatenate and store
+  if (totalFiles > 0) {
+    addLog(`Storing ${totalFiles} TTL files (${formatBytes(totalSize)})...`);
+    renderProgress();
+
+    const concatenated = allTTLParts.join('\n');
+    try {
+      await dbPut('ttl', concatenated);
+      await dbPut('meta', {
+        date: new Date().toISOString(),
+        totalFiles,
+        totalSize: concatenated.length,
+        reposHarvested
+      });
+      addLog(`Done! Stored ${totalFiles} files from ${reposHarvested} repositories.`, 'log-ok');
+    } catch (err) {
+      addLog(`Storage error: ${err.message}`, 'log-err');
+    }
+  } else {
+    addLog('No TTL files were collected.', 'log-err');
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Harvest all instances';
+  harvestAbort = null;
+  renderProgress();
+  await showStoredStatus();
+}
+
+// ── Download stored TTL ──
+async function downloadStoredTTL() {
+  try {
+    const ttl = await dbGet('ttl');
+    if (!ttl) {
+      alert('No stored harvest data. Run a harvest first.');
+      return;
+    }
+    const blob = new Blob([ttl], { type: 'text/turtle;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'sparql-examples-all.ttl';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    alert('Error downloading: ' + err.message);
+  }
+}
+
+// ── Clear stored data ──
+async function clearStoredTTL() {
+  if (!confirm('Remove the stored harvest data?')) return;
+  try {
+    await dbDelete('ttl');
+    await dbDelete('meta');
+    await showStoredStatus();
+    document.getElementById('harvest-progress').innerHTML = '';
+  } catch (err) {
+    alert('Error clearing data: ' + err.message);
+  }
+}
+
+// ── Load forks ──
+async function loadForks() {
+  const stats = document.getElementById('repo-stats');
+  const select = document.getElementById('repo-select');
+  const btnHarvest = document.getElementById('btn-harvest');
+
+  // Always seed allForks with the original so loading never fails completely
+  const sibSwiss = {
+    owner: 'sib-swiss',
+    repo: 'sparql-examples',
+    full_name: 'sib-swiss/sparql-examples',
+    description: 'Original SIB Swiss repository'
+  };
+
+  try {
+    // Fetch all forks with pagination support
+    let allForksData = [];
+    let page = 1;
+    let hasMore = true;
+
+    stats.innerHTML = '<span>Loading forks from GitHub...</span>';
+
+    while (hasMore) {
+      const response = await fetch(
+        `https://api.github.com/repos/sib-swiss/sparql-examples/forks?per_page=100&page=${page}`,
+        { headers: { 'Accept': 'application/vnd.github.v3+json' } }
+      );
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        const reason = body.message || response.statusText;
+        const hint = response.status === 403
+          ? ' (GitHub API rate limit — try again in a few minutes)'
+          : '';
+        throw new Error(`HTTP ${response.status}: ${reason}${hint}`);
+      }
+
+      const forks = await response.json();
+
+      if (forks.length === 0) {
+        hasMore = false;
+      } else {
+        allForksData = allForksData.concat(forks);
+        page++;
+        stats.innerHTML = `<span>Loading forks from GitHub... (${allForksData.length} found so far)</span>`;
+
+        // Stop after 5 pages (500 forks) to avoid rate limiting
+        if (page > 5) hasMore = false;
+      }
+    }
+
+    allForks = [
+      sibSwiss,
+      ...allForksData.map(fork => ({
+        owner: fork.owner.login,
+        repo: fork.name,
+        full_name: fork.full_name,
+        description: fork.description || ''
+      }))
+    ];
+
+    stats.innerHTML = `<span>${allForks.length} repositories found (1 original + ${allForksData.length} forks)</span>`;
+
+    select.innerHTML = allForks.map((fork, idx) =>
+      `<option value="${idx}" ${idx === 0 ? 'selected' : ''}>
+        ${fork.full_name} ${idx === 0 ? '(Original)' : ''}
+      </option>`
+    ).join('');
+
+    btnHarvest.disabled = false;
+    document.getElementById('btn-load-all').disabled = false;
+
+  } catch (error) {
+    console.error('Error loading forks:', error);
+    // Fall back to SIB Swiss only so the page is still usable
+    allForks = [sibSwiss];
+    select.innerHTML = `<option value="0">${sibSwiss.full_name} (Original)</option>`;
+    btnHarvest.disabled = false;
+    document.getElementById('btn-load-all').disabled = false;
+    stats.innerHTML = `<span style="color: #c53030;">Could not load forks: ${error.message} — showing original repository only.</span>`;
+    select.innerHTML = '<option value="">Error loading repositories</option>';
+  }
+}
+
+// ── Load examples for a single repo (existing browser feature) ──
+async function loadExamples() {
+  const select = document.getElementById('repo-select');
+  const container = document.getElementById('examples-container');
+  const selectedIndex = parseInt(select.value);
+
+  if (isNaN(selectedIndex)) return;
+
+  currentRepo = allForks[selectedIndex];
+  container.innerHTML = '<div class="loading">Loading examples from repository</div>';
+
+  try {
+    // Use Trees API for efficiency
+    let tree, branch = 'main';
+    const resp = await fetch(
+      `https://api.github.com/repos/${currentRepo.owner}/${currentRepo.repo}/git/trees/main?recursive=1`,
+      { headers: { 'Accept': 'application/vnd.github.v3+json' } }
+    );
+    if (resp.ok) {
+      tree = await resp.json();
+    } else {
+      const resp2 = await fetch(
+        `https://api.github.com/repos/${currentRepo.owner}/${currentRepo.repo}/git/trees/master?recursive=1`,
+        { headers: { 'Accept': 'application/vnd.github.v3+json' } }
+      );
+      if (!resp2.ok) throw new Error('Could not fetch repository tree');
+      tree = await resp2.json();
+      branch = 'master';
+    }
+
+    // Find .ttl files under examples/
+    const ttlFiles = (tree.tree || []).filter(f =>
+      f.type === 'blob' && f.path.startsWith('examples/') && f.path.endsWith('.ttl')
+    );
+
+    if (ttlFiles.length === 0) {
+      container.innerHTML = '<div class="loading">No TTL example files found in this repository</div>';
+      return;
+    }
+
+    container.innerHTML = `<div class="loading">Loading ${ttlFiles.length} examples</div>`;
+
+    const examples = [];
+    const batchSize = 10;
+
+    for (let i = 0; i < ttlFiles.length; i += batchSize) {
+      const batch = ttlFiles.slice(i, i + batchSize);
+      const results = await Promise.all(batch.map(async f => {
+        try {
+          const rawUrl = `https://raw.githubusercontent.com/${currentRepo.owner}/${currentRepo.repo}/${branch}/${f.path}`;
+          const r = await fetch(rawUrl);
+          if (!r.ok) return null;
+          const content = await r.text();
+          const parsed = parseTTLFile(content);
+          const relPath = f.path.replace(/^examples\//, '').replace(/\.ttl$/, '');
+          return { id: relPath, ...parsed, path: f.path, repo: currentRepo, branch };
+        } catch { return null; }
+      }));
+      examples.push(...results.filter(Boolean));
+      container.innerHTML = `<div class="loading">Loaded ${examples.length}/${ttlFiles.length} examples</div>`;
+    }
+
+    allExamples = examples;
+    filteredExamples = examples;
+    renderEndpointsList(examples);
+    await persistExamples();
+
+  } catch (error) {
+    console.error('Error loading examples:', error);
+    container.innerHTML = `<div class="error">Error loading examples: ${error.message}</div>`;
+  }
+}
+
+// ── Load examples from ALL repositories ──
+async function loadAllExamples() {
+  const btn = document.getElementById('btn-load-all');
+  const container = document.getElementById('examples-container');
+
+  if (allForks.length === 0) {
+    container.innerHTML = '<div class="error">No repositories loaded yet.</div>';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Loading all...';
+
+  const examples = [];
+  let reposDone = 0;
+  const loadErrors = [];
+  const repoStats = [];
+
+  for (const fork of allForks) {
+    const repoStartTime = Date.now();
+    container.innerHTML = `<div class="loading">
+      Loading ${fork.full_name} (${reposDone + 1}/${allForks.length})
+      <br>${examples.length} examples collected so far
+      ${loadErrors.length > 0 ? `<br><span style="color: #c53030;">${loadErrors.length} repositories failed</span>` : ''}
+    </div>`;
+
+    try {
+      let tree, branch = 'main';
+      const resp = await fetch(
+        `https://api.github.com/repos/${fork.owner}/${fork.repo}/git/trees/main?recursive=1`,
+        { headers: { 'Accept': 'application/vnd.github.v3+json' } }
+      );
+      if (resp.ok) {
+        tree = await resp.json();
+      } else {
+        const resp2 = await fetch(
+          `https://api.github.com/repos/${fork.owner}/${fork.repo}/git/trees/master?recursive=1`,
+          { headers: { 'Accept': 'application/vnd.github.v3+json' } }
+        );
+        if (!resp2.ok) {
+          loadErrors.push({ repo: fork.full_name, error: `HTTP ${resp2.status}: Could not fetch repository tree` });
+          reposDone++;
+          continue;
+        }
+        tree = await resp2.json();
+        branch = 'master';
+      }
+
+      const ttlFiles = (tree.tree || []).filter(f =>
+        f.type === 'blob' && f.path.startsWith('examples/') && f.path.endsWith('.ttl')
+      );
+
+      const repoExampleCount = ttlFiles.length;
+      const batchSize = 10;
+      let loadedFromRepo = 0;
+
+      for (let i = 0; i < ttlFiles.length; i += batchSize) {
+        const batch = ttlFiles.slice(i, i + batchSize);
+        const results = await Promise.all(batch.map(async f => {
+          try {
+            const rawUrl = `https://raw.githubusercontent.com/${fork.owner}/${fork.repo}/${branch}/${f.path}`;
+            const r = await fetch(rawUrl);
+            if (!r.ok) return null;
+            const content = await r.text();
+            const parsed = parseTTLFile(content);
+            const relPath = f.path.replace(/^examples\//, '').replace(/\.ttl$/, '');
+            return { id: `${fork.full_name}/${relPath}`, ...parsed, path: f.path, repo: fork, branch };
+          } catch { return null; }
+        }));
+        const validResults = results.filter(Boolean);
+        examples.push(...validResults);
+        loadedFromRepo += validResults.length;
+      }
+
+      const elapsed = ((Date.now() - repoStartTime) / 1000).toFixed(1);
+      repoStats.push({ repo: fork.full_name, examples: loadedFromRepo, time: elapsed });
+
+    } catch (err) {
+      console.error(`Error loading ${fork.full_name}:`, err);
+      loadErrors.push({ repo: fork.full_name, error: err.message });
+    }
+    reposDone++;
+  }
+
+  // Show final results with detailed stats
+  allExamples = examples;
+  filteredExamples = examples;
+  renderEndpointsList(examples);
+  if (examples.length > 0) await persistExamples();
+
+  // Build summary HTML
+  const successCount = repoStats.length;
+  const hasErrors = loadErrors.length > 0;
+  const summaryHTML = `
+    <div class="${examples.length > 0 ? 'success' : 'error'}" style="margin:0;">
+      <strong>${examples.length > 0
+        ? `Loaded ${examples.length} examples from ${successCount}/${allForks.length} repositories`
+        : `No examples found across ${allForks.length} repositories`}</strong>
+      ${hasErrors ? `<br><br><strong>Failed repositories (${loadErrors.length}):</strong><br>` +
+        loadErrors.map(e => `&bull; ${escapeHtml(e.repo)}: ${escapeHtml(e.error)}`).join('<br>') : ''}
+    </div>
+  `;
+
+  const endpointsPanel = document.getElementById('endpoints-panel');
+  const loadingPanel = document.getElementById('loading-panel');
+
+
+  if (endpointsPanel && endpointsPanel.style.display !== 'none') {
+    // Examples loaded — show summary at top of endpoints panel, auto-remove
+    const summaryDiv = document.createElement('div');
+    summaryDiv.innerHTML = summaryHTML;
+    summaryDiv.style.margin = '0 0 0.75rem 0';
+    const filterBox = endpointsPanel.querySelector('.filter-box');
+    if (filterBox) filterBox.before(summaryDiv);
+    else endpointsPanel.appendChild(summaryDiv);
+    setTimeout(() => summaryDiv.remove(), 15000);
+  } else {
+    // 0 examples — show summary in the loading panel so user isn't stuck
+    if (container) container.innerHTML = summaryHTML;
+    if (loadingPanel) loadingPanel.style.display = '';
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Load all repos';
+}
+
+// ── Parse a TTL example file to extract display metadata ──
+function parseTTLFile(content) {
+  const meta = { query: '', title: '', description: '', endpoints: [], tags: [] };
+
+  // Extract rdfs:comment as description (triple-quoted must be tried first;
+  // the single-quoted regex would otherwise match the empty "" in """...""")
+  const commentMatch = content.match(/rdfs:comment\s+"""([\s\S]*?)"""/) ||
+                        content.match(/rdfs:comment\s+"((?:[^"\\]|\\.)*)"/s);
+  if (commentMatch) meta.description = commentMatch[1].replace(/\\"/g, '"').replace(/<[^>]*>/g, '').trim();
+
+  // Extract query from sh:select, sh:ask, sh:construct
+  const queryMatch = content.match(/sh:(?:select|ask|construct)\s+"""([\s\S]*?)"""/);
+  if (queryMatch) meta.query = queryMatch[1].trim();
+
+  // Extract target endpoint
+  const targetMatches = content.matchAll(/schema:target\s+<([^>]+)>/g);
+  for (const m of targetMatches) meta.endpoints.push(m[1]);
+
+  // Extract keywords
+  const kwMatches = content.matchAll(/schema:keywords\s+"([^"]+)"/g);
+  for (const m of kwMatches) meta.tags.push(m[1]);
+
+  // Build title from the filename/URI and first line of description
+  if (meta.description) {
+    // Use first sentence as title, rest as description
+    const firstSentence = meta.description.split(/[.!?]\s/)[0];
+    meta.title = firstSentence.length > 120 ? firstSentence.substring(0, 120) + '...' : firstSentence;
+  } else {
+    meta.title = 'Untitled Example';
+  }
+
+  return meta;
+}
+
+// ── Load examples from IndexedDB cache (if fresh) ──
+async function loadCachedExamples() {
+  try {
+    const cached = await dbGet('examples');
+    if (!cached || !cached.meta || !cached.examples || cached.examples.length === 0) return false;
+
+    const age = Date.now() - new Date(cached.meta.lastUpdated).getTime();
+    if (age > CACHE_MAX_AGE_MS) return false;
+
+    allExamples = cached.examples;
+    filteredExamples = cached.examples;
+    renderEndpointsList(cached.examples);
+    showCacheBanner(cached.meta);
+    return true;
+  } catch (err) {
+    console.error('Failed to load cached examples:', err);
+    return false;
+  }
+}
+
+function showCacheBanner(meta) {
+  const panel = document.getElementById('endpoints-panel');
+  if (!panel) return;
+
+  const existing = document.getElementById('cache-banner');
+  if (existing) existing.remove();
+
+  const ageMs = Date.now() - new Date(meta.lastUpdated).getTime();
+  const ageMin = Math.round(ageMs / 60000);
+  const ageStr = ageMin < 60 ? `${ageMin}m ago` : `${Math.round(ageMin / 60)}h ago`;
+
+  const banner = document.createElement('div');
+  banner.id = 'cache-banner';
+  banner.style.cssText = 'background:var(--success-bg); border:1px solid var(--border-soft); border-radius:4px; padding:0.5rem 1rem; font-size:0.82rem; display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-bottom:0.75rem;';
+  banner.innerHTML = `
+    <span style="color:var(--text-muted);">
+      Cached &mdash; ${meta.totalExamples} examples from ${meta.sourceRepos} repositories,
+      last updated ${ageStr} (${new Date(meta.lastUpdated).toLocaleString()})
+    </span>
+    <button class="secondary" style="font-size:0.78rem; padding:0.3rem 0.7rem; white-space:nowrap;" onclick="refreshExamples()">Refresh</button>
+  `;
+  // Insert after the h2+p header, before the filter box
+  const filterBox = panel.querySelector('.filter-box');
+  if (filterBox) filterBox.before(banner);
+  else panel.appendChild(banner);
+}
+
+async function refreshExamples() {
+  const banner = document.getElementById('cache-banner');
+  if (banner) banner.remove();
+  await loadAllExamples();
+}
+
+// ── Persist parsed examples to IndexedDB for sharing with index files ──
+async function persistExamples() {
+  if (allExamples.length === 0) return;
+  try {
+    await dbPut('examples', {
+      examples: allExamples,
+      meta: {
+        lastUpdated: new Date().toISOString(),
+        totalExamples: allExamples.length,
+        sourceRepos: new Set(allExamples.map(ex => ex.repo.full_name)).size
+      }
+    });
+    console.log(`Persisted ${allExamples.length} examples to IndexedDB`);
+  } catch (err) {
+    console.error('Failed to persist examples:', err);
+  }
+}
+
+// ── Toggle setup panel ──
+function toggleSetup() {
+  const body = document.getElementById('setup-body');
+  const chevron = document.getElementById('setup-chevron');
+  body.classList.toggle('collapsed');
+  chevron.style.transform = body.classList.contains('collapsed') ? '' : 'rotate(90deg)';
+}
+
+// ── Filter examples and re-render endpoints ──
+function filterExamples() {
+  const filter = document.getElementById('example-filter').value.toLowerCase();
+
+  if (!filter) {
+    filteredExamples = allExamples;
+  } else {
+    filteredExamples = allExamples.filter(ex => {
+      const searchText = `${ex.title} ${ex.description} ${ex.id} ${ex.tags.join(' ')} ${ex.endpoints.join(' ')}`.toLowerCase();
+      return searchText.includes(filter);
+    });
+  }
+
+  renderEndpointsList(filteredExamples);
+}
+
+// ── Render endpoints as expandable cards with nested example rows ──
+function renderEndpointsList(examples) {
+  const panel = document.getElementById('endpoints-panel');
+  const loadingPanel = document.getElementById('loading-panel');
+  const container = document.getElementById('endpoints-list-container');
+  const summary = document.getElementById('endpoints-summary');
+
+  // Group examples by endpoint
+  const endpointMap = {};
+  const noEndpoint = [];
+  for (const ex of examples) {
+    if (ex.endpoints.length === 0) {
+      noEndpoint.push(ex);
+    } else {
+      for (const ep of ex.endpoints) {
+        if (!endpointMap[ep]) endpointMap[ep] = [];
+        endpointMap[ep].push(ex);
+      }
+    }
+  }
+
+  const sorted = Object.entries(endpointMap).sort((a, b) => b[1].length - a[1].length);
+
+  if (sorted.length === 0 && noEndpoint.length === 0) {
+    panel.style.display = 'none';
+    if (loadingPanel) loadingPanel.style.display = '';
+    return;
+  }
+
+  panel.style.display = 'block';
+  if (loadingPanel) loadingPanel.style.display = 'none';
+
+  const totalExamples = examples.length;
+  summary.textContent = `${sorted.length} endpoint${sorted.length !== 1 ? 's' : ''}, ${totalExamples} example${totalExamples !== 1 ? 's' : ''}`;
+
+  container.innerHTML = `
+    <div class="endpoint-list">
+      ${sorted.map(([url, exs], idx) => `
+        <div class="endpoint-card" id="ep-card-${idx}">
+          <div class="endpoint-card-header" onclick="toggleEndpointCard(${idx})">
+            <div>
+              <div class="ep-name">${extractEndpointName(url)}</div>
+              <div class="ep-url">${escapeHtml(url)}</div>
+            </div>
+            <div class="ep-right">
+              <span class="ep-count">${exs.length} quer${exs.length !== 1 ? 'ies' : 'y'}</span>
+              <span class="ep-chevron">&#9654;</span>
+            </div>
+          </div>
+          <div class="endpoint-card-body">
+            ${exs.map(ex => `
+              <div class="ep-example-row" data-id="${escapeAttr(ex.id)}" onclick="selectExample(this, '${escapeAttr(ex.id)}')">
+                <span class="ep-ex-id">${escapeHtml(ex.id.split('/').pop())}</span>
+                <span class="ep-ex-title">${escapeHtml(ex.title)}</span>
+                ${ex.repo ? `<span class="ep-ex-repo">${escapeHtml(ex.repo.owner)}</span>` : ''}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `).join('')}
+      ${noEndpoint.length > 0 ? `
+        <div class="endpoint-card" id="ep-card-none">
+          <div class="endpoint-card-header" onclick="toggleEndpointCard('none')">
+            <div>
+              <div class="ep-name">No endpoint specified</div>
+              <div class="ep-url">Examples without a target endpoint</div>
+            </div>
+            <div class="ep-right">
+              <span class="ep-count">${noEndpoint.length} quer${noEndpoint.length !== 1 ? 'ies' : 'y'}</span>
+              <span class="ep-chevron">&#9654;</span>
+            </div>
+          </div>
+          <div class="endpoint-card-body">
+            ${noEndpoint.map(ex => `
+              <div class="ep-example-row" data-id="${escapeAttr(ex.id)}" onclick="selectExample(this, '${escapeAttr(ex.id)}')">
+                <span class="ep-ex-id">${escapeHtml(ex.id.split('/').pop())}</span>
+                <span class="ep-ex-title">${escapeHtml(ex.title)}</span>
+                ${ex.repo ? `<span class="ep-ex-repo">${escapeHtml(ex.repo.owner)}</span>` : ''}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+function toggleEndpointCard(idx) {
+  const card = document.getElementById('ep-card-' + idx);
+  if (!card) return;
+  card.classList.toggle('active');
+}
+
+function selectExample(rowEl, exampleId) {
+  selectedExample = allExamples.find(ex => ex.id === exampleId);
+  if (!selectedExample) return;
+
+  // Remove previous selections and inline details
+  document.querySelectorAll('.ep-example-row.selected').forEach(r => r.classList.remove('selected'));
+  document.querySelectorAll('.example-detail-inline').forEach(d => d.remove());
+
+  // Highlight this row
+  rowEl.classList.add('selected');
+
+  // Insert inline detail panel after the row
+  const detail = document.createElement('div');
+  detail.className = 'example-detail-inline';
+  detail.innerHTML = `
+    <h3>${escapeHtml(selectedExample.title)}</h3>
+    <div class="detail-meta">
+      ${escapeHtml(selectedExample.id)} &bull; ${selectedExample.repo.full_name}
+      ${selectedExample.tags.length > 0 ? ' &bull; ' + selectedExample.tags.join(', ') : ''}
+    </div>
+    ${selectedExample.description && selectedExample.description !== selectedExample.title
+      ? `<div class="detail-desc">${escapeHtml(selectedExample.description)}</div>` : ''}
+    <div class="query-preview">${escapeHtml(selectedExample.query)}</div>
+    <div class="detail-actions" style="margin-top:0.75rem;">
+      <button onclick="runInExplorer()">Run in Explorer</button>
+      <button class="secondary" onclick="copyQuery()">Copy Query</button>
+      <button class="secondary" onclick="viewOnGitHub()">View on GitHub</button>
+    </div>
+  `;
+  rowEl.after(detail);
+
+  detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function escapeAttr(s) {
+  return s.replace(/&/g,'&amp;').replace(/'/g,'&#39;').replace(/"/g,'&quot;');
+}
+
+function extractEndpointName(url) {
+  try {
+    const hostname = new URL(url).hostname.replace('www.', '');
+    const parts = hostname.split('.');
+    return parts.length > 2 ? parts[parts.length - 2] : hostname;
+  } catch {
+    return url.split('/')[0];
+  }
+}
+
+function runInExplorer() {
+  if (!selectedExample) return alert('Please select an example first');
+  if (selectedExample.endpoints.length === 0) return alert('This example has no endpoints specified.');
+
+  const params = new URLSearchParams();
+  params.set('query', selectedExample.query);
+  params.set('endpoints', JSON.stringify(selectedExample.endpoints));
+  params.set('title', selectedExample.title);
+  window.open(`index.html?${params.toString()}`, '_blank');
+}
+
+function copyQuery() {
+  if (!selectedExample) return alert('Please select an example first');
+  navigator.clipboard.writeText(selectedExample.query)
+    .then(() => alert('Query copied to clipboard!'))
+    .catch(err => alert('Failed to copy: ' + err.message));
+}
+
+function viewOnGitHub() {
+  if (!selectedExample) return alert('Please select an example first');
+  const b = selectedExample.branch || 'main';
+  const url = `https://github.com/${selectedExample.repo.owner}/${selectedExample.repo.repo}/blob/${b}/${selectedExample.path}`;
+  window.open(url, '_blank');
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+</script>
+
+</body>
+</html>

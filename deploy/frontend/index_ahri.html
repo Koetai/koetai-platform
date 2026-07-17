@@ -1,0 +1,969 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Koetai SPARQL Explorer - AHRI Edition</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    :root {
+      --bg-main: #f4f7f6;
+      --bg-panel: #ffffff;
+      --accent-soft: #a8d5ba;
+      --accent-dark: #1a6b4a;
+      --accent-hover: #145438;
+      --text-main: #2a2a2a;
+      --text-muted: #5f6f68;
+      --border-soft: #d4e4dc;
+      --success-bg: #eef6f1;
+      --error-bg: #fff5f5;
+      --highlight-light: #d0e8da;
+      --highlight-dark: #3a8f6a;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+                   Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg-main);
+      color: var(--text-main);
+      line-height: 1.6;
+    }
+
+    h1, h2 {
+      font-family: Georgia, "Times New Roman", serif;
+      font-weight: 500;
+    }
+
+    header {
+      padding: 3rem 2rem;
+      background: linear-gradient(135deg, #1a6b4a 0%, #2e8b63 40%, #3a9f74 100%);
+      border-bottom: 3px solid #145438;
+      position: relative;
+      overflow: hidden;
+      color: #fff;
+    }
+
+    header::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+      opacity: 0.3;
+    }
+
+    header h1 {
+      margin: 0 0 0.5rem 0;
+      font-size: 2.3rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      color: #fff;
+      position: relative;
+      z-index: 1;
+    }
+
+    .header-badge {
+      display: inline-block;
+      background: #a8d5ba;
+      color: #145438;
+      padding: 0.3rem 0.8rem;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      letter-spacing: 0.5px;
+      position: relative;
+      z-index: 1;
+    }
+
+    header h1::before {
+      content: "";
+      display: inline-block;
+      width: 48px;
+      height: 48px;
+      background-image: url('koetai-icon.png');
+      background-size: contain;
+      background-repeat: no-repeat;
+      background-position: center;
+      flex-shrink: 0;
+    }
+
+    .ahri-subtitle {
+      margin-top: 1rem;
+      color: #a8d5ba;
+      font-size: 1.1rem;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      position: relative;
+      z-index: 1;
+    }
+
+    header p {
+      margin: 0;
+      color: rgba(255, 255, 255, 0.9);
+      max-width: 48rem;
+      font-style: italic;
+      position: relative;
+      z-index: 1;
+    }
+
+    header p::before {
+      content: "\1F41F ";
+      opacity: 0.8;
+    }
+
+    .header-links {
+      margin-top: 0.75rem;
+      position: relative;
+      z-index: 1;
+    }
+
+    .header-links a {
+      color: rgba(255,255,255,0.8);
+      text-decoration: none;
+      font-size: 0.85rem;
+      border-bottom: 1px solid rgba(255,255,255,0.3);
+      transition: all 0.2s;
+    }
+
+    .header-links a:hover {
+      color: #fff;
+      border-bottom-color: #fff;
+    }
+
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 2rem;
+      display: grid;
+      gap: 2rem;
+    }
+
+    .panel {
+      background: var(--bg-panel);
+      padding: 1.5rem;
+      border-radius: 6px;
+      border: 1px solid var(--border-soft);
+    }
+
+    .panel h2 {
+      margin-top: 0;
+      font-size: 1.4rem;
+    }
+
+    .endpoint-panel {
+      background: var(--bg-panel);
+      padding: 1.25rem;
+      border-radius: 6px;
+      border: 2px solid var(--accent-dark);
+    }
+
+    .endpoint-controls {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 0.75rem;
+    }
+
+    .endpoint-controls label {
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .endpoint-controls select {
+      padding: 0.5rem 0.75rem;
+      font-size: 0.9rem;
+      border: 1px solid var(--border-soft);
+      border-radius: 4px;
+      background: #fff;
+      min-width: 280px;
+      cursor: pointer;
+    }
+
+    .endpoint-controls button {
+      padding: 0.5rem 1rem;
+      font-size: 0.85rem;
+      background: #f5f5f5;
+      border: 1px solid var(--border-soft);
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .endpoint-controls button:hover {
+      background: #e8e8e8;
+    }
+
+    .endpoint-status {
+      padding: 0.75rem;
+      background: var(--success-bg);
+      border-radius: 4px;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .endpoint-status strong {
+      color: var(--text-main);
+    }
+
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+
+    .modal-overlay.active { display: flex; }
+
+    .modal {
+      background: var(--bg-panel);
+      padding: 2rem;
+      border-radius: 8px;
+      max-width: 600px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    .modal h2 { margin-top: 0; font-size: 1.5rem; }
+
+    .endpoint-list { margin-bottom: 1.5rem; }
+
+    .endpoint-item {
+      padding: 0.75rem;
+      border: 1px solid var(--border-soft);
+      border-radius: 4px;
+      margin-bottom: 0.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .endpoint-item.active {
+      background: var(--success-bg);
+      border-color: var(--accent-dark);
+    }
+
+    .endpoint-info { flex: 1; }
+    .endpoint-name { font-weight: 600; font-size: 0.9rem; }
+    .endpoint-url { font-size: 0.8rem; color: var(--text-muted); word-break: break-all; }
+
+    .endpoint-actions { display: flex; gap: 0.5rem; }
+
+    .endpoint-actions button {
+      padding: 0.4rem 0.75rem;
+      font-size: 0.8rem;
+      border: 1px solid var(--border-soft);
+      border-radius: 4px;
+      cursor: pointer;
+      background: #f5f5f5;
+    }
+
+    .endpoint-actions button.active-btn {
+      background: var(--accent-dark);
+      color: #fff;
+      border-color: var(--accent-dark);
+    }
+
+    .add-endpoint {
+      padding: 1rem;
+      background: #f9f9f9;
+      border-radius: 4px;
+      margin-bottom: 1.5rem;
+    }
+
+    .add-endpoint h3 { margin-top: 0; font-size: 1.1rem; }
+
+    .form-group { margin-bottom: 0.75rem; }
+    .form-group label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.25rem; }
+    .form-group input { width: 100%; padding: 0.5rem; border: 1px solid var(--border-soft); border-radius: 4px; font-size: 0.9rem; }
+
+    .modal-actions { display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1rem; }
+
+    textarea {
+      width: 100%;
+      min-height: 10rem;
+      font-family: monospace;
+      font-size: 0.95rem;
+      padding: 0.75rem;
+      border: 1px solid var(--border-soft);
+      border-radius: 4px;
+      background: #fafafa;
+      resize: vertical;
+    }
+
+    button.primary {
+      padding: 0.5rem 1.2rem; font-size: 0.9rem;
+      background: var(--accent-dark); color: #fff;
+      border: none; border-radius: 4px; cursor: pointer;
+    }
+    button.primary:hover { background: var(--accent-hover); }
+
+    button.secondary {
+      padding: 0.5rem 1.2rem; font-size: 0.9rem;
+      background: #f5f5f5; color: var(--text-main);
+      border: 1px solid var(--border-soft); border-radius: 4px; cursor: pointer;
+    }
+    button.secondary:hover { background: #e8e8e8; }
+
+    #message { padding: 1rem; margin-bottom: 1rem; border-radius: 4px; display: none; }
+    #message.success { background: var(--success-bg); color: #1a5c35; border: 1px solid #8bc8a4; display: block; }
+    #message.error { background: var(--error-bg); color: #a94442; border: 1px solid #f5c6cb; display: block; }
+
+    table { width: 100%; border-collapse: collapse; margin-top: 1rem; background: #fff; font-size: 0.9rem; }
+    table th, table td { padding: 0.75rem; border: 1px solid var(--border-soft); text-align: left; }
+    table th { background: var(--success-bg); font-weight: 600; color: var(--accent-dark); position: sticky; top: 0; z-index: 10; }
+    table tbody tr:hover { background: #f0f7f3; }
+    table a { color: var(--accent-dark); text-decoration: none; word-break: break-all; }
+    table a:hover { text-decoration: underline; }
+
+    .results-container { max-height: 600px; overflow: auto; border: 1px solid var(--border-soft); border-radius: 4px; }
+    .muted { color: var(--text-muted); font-style: italic; }
+
+    .export-buttons { display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap; }
+    .export-buttons button { padding: 0.4rem 0.8rem; font-size: 0.85rem; background: #f5f5f5; border: 1px solid var(--border-soft); border-radius: 4px; cursor: pointer; }
+    .export-buttons button:hover { background: #e8e8e8; }
+
+    #viz-tabs { display: none; margin-bottom: 1rem; }
+    .tab-buttons { display: flex; gap: 0.5rem; border-bottom: 2px solid var(--border-soft); margin-bottom: 1rem; }
+    .tab-buttons button { padding: 0.6rem 1.2rem; background: transparent; border: none; border-bottom: 3px solid transparent; cursor: pointer; font-size: 0.9rem; color: var(--text-muted); transition: all 0.2s; }
+    .tab-buttons button:hover { color: var(--text-main); background: #f0f7f3; }
+    .tab-buttons button.active { color: var(--accent-dark); border-bottom-color: var(--accent-dark); font-weight: 600; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    #graph-container { background: #fff; border: 1px solid var(--border-soft); border-radius: 4px; min-height: 500px; position: relative; }
+    #graph-container svg { width: 100%; height: 500px; }
+    .node { cursor: pointer; }
+    .node circle { fill: var(--accent-soft); stroke: var(--accent-dark); stroke-width: 2px; }
+    .node:hover circle { fill: var(--highlight-light); }
+    .node text { font-size: 11px; pointer-events: none; text-anchor: middle; }
+    .link { stroke: var(--highlight-dark); stroke-opacity: 0.6; stroke-width: 1.5px; fill: none; }
+    .link-label { font-size: 9px; fill: var(--text-muted); pointer-events: none; }
+
+    #map-container { background: #fff; border: 1px solid var(--border-soft); border-radius: 4px; height: 500px; position: relative; }
+    #chart-container { background: #fff; border: 1px solid var(--border-soft); border-radius: 4px; min-height: 400px; padding: 1rem; }
+    .chart-tooltip { position: absolute; background: rgba(26, 107, 74, 0.95); color: #fff; padding: 0.5rem 0.75rem; border-radius: 4px; font-size: 0.85rem; pointer-events: none; opacity: 0; transition: opacity 0.2s; z-index: 1000; }
+
+    #pathway-container { background: #fff; border: 1px solid var(--border-soft); border-radius: 4px; min-height: 400px; padding: 1rem; }
+    .pathway-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; }
+    .pathway-card { border: 1px solid var(--border-soft); border-radius: 4px; padding: 1rem; cursor: pointer; transition: all 0.2s; background: #fff; }
+    .pathway-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-color: var(--accent-dark); }
+    .pathway-title { font-weight: 600; font-size: 1rem; margin-bottom: 0.5rem; color: var(--accent-dark); }
+    .pathway-meta { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem; }
+    .pathway-description { font-size: 0.85rem; color: var(--text-main); margin-top: 0.5rem; line-height: 1.4; }
+    .pathway-network { min-height: 500px; position: relative; }
+    .pathway-node circle { cursor: pointer; }
+    .pathway-link { stroke: var(--highlight-dark); stroke-opacity: 0.4; }
+
+    #timeline-container { background: #fff; border: 1px solid var(--border-soft); border-radius: 4px; min-height: 300px; padding: 1rem; }
+    .timeline-item { padding: 0.75rem; border-left: 3px solid var(--accent-dark); margin-bottom: 1rem; background: #f8fbf9; border-radius: 0 4px 4px 0; }
+    .timeline-date { font-weight: 600; color: var(--accent-dark); margin-bottom: 0.25rem; }
+    .timeline-content { font-size: 0.9rem; color: var(--text-main); }
+
+    @media (max-width: 768px) {
+      header { padding: 2rem 1rem; }
+      header h1 { font-size: 1.8rem; }
+      main { padding: 1rem; }
+      .endpoint-controls { flex-direction: column; align-items: stretch; }
+      .endpoint-controls select { min-width: auto; }
+      .tab-buttons { flex-wrap: wrap; }
+      .pathway-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+
+<body>
+
+<header>
+  <div class="header-badge">AHRI EDITION</div>
+  <h1>Koetai SPARQL Explorer</h1>
+  <div class="ahri-subtitle">Africa Health Research Institute</div>
+  <p>Navigate AHRI research data with clarity &mdash; seeing above and below the waterline</p>
+  <div class="header-links">
+    <a href="https://www.ahri.org" target="_blank">ahri.org</a>
+  </div>
+</header>
+
+<main>
+
+  <div class="endpoint-panel">
+    <div class="endpoint-controls">
+      <label for="endpoint-select">SPARQL Endpoint:</label>
+      <select id="endpoint-select" onchange="switchEndpoint()">
+        <option value="ahri">AHRI SPARQL (Default)</option>
+        <option value="wikidata">Wikidata Query Service</option>
+        <option value="dbpedia">DBpedia SPARQL</option>
+        <option value="uniprot">UniProt SPARQL</option>
+        <option value="wikipathways">WikiPathways SPARQL</option>
+        <option value="custom">Custom Endpoint...</option>
+      </select>
+      <button onclick="openManageEndpoints()">Manage Endpoints</button>
+    </div>
+    <div id="endpoint-status" class="endpoint-status">
+      <strong>Current:</strong> <span id="current-endpoint-url">/endpoint3</span>
+    </div>
+  </div>
+
+  <div id="manage-modal" class="modal-overlay">
+    <div class="modal">
+      <h2>Manage SPARQL Endpoints</h2>
+      <div class="add-endpoint">
+        <h3>Add Custom Endpoint</h3>
+        <div class="form-group">
+          <label for="endpoint-name">Name:</label>
+          <input type="text" id="endpoint-name" placeholder="My Endpoint" />
+        </div>
+        <div class="form-group">
+          <label for="endpoint-url">URL:</label>
+          <input type="text" id="endpoint-url" placeholder="https://example.org/sparql" />
+        </div>
+        <button class="primary" onclick="addCustomEndpoint()">Add Endpoint</button>
+      </div>
+      <div class="endpoint-list" id="endpoint-list"></div>
+      <div class="modal-actions">
+        <button class="secondary" onclick="closeManageEndpoints()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="message"></div>
+
+  <div class="panel">
+    <h2>SPARQL Query</h2>
+    <textarea id="query" placeholder="Enter your SPARQL query here..."></textarea>
+    <div style="margin-top: 1rem; display: flex; gap: 0.75rem; flex-wrap: wrap;">
+      <button class="primary" onclick="runQuery()">Run Query</button>
+      <button class="secondary" onclick="loadExample()">Load Example</button>
+      <button class="secondary" onclick="openExamplesBrowser()">Browse Examples</button>
+      <button class="secondary" onclick="clearQuery()">Clear</button>
+    </div>
+  </div>
+
+  <div class="panel" id="examples-panel" style="display:none; max-height:70vh; overflow-y:auto;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+      <h2 style="margin:0;">Stored SPARQL Examples</h2>
+      <button class="secondary" onclick="closeExamplesBrowser()" style="padding:0.25rem 0.75rem;">Close</button>
+    </div>
+    <input type="text" id="examples-filter" placeholder="Filter by title, description, tags, endpoint…"
+           oninput="filterStoredExamples()" style="width:100%; padding:0.5rem; margin-bottom:0.75rem; border:1px solid var(--border-soft); border-radius:6px;">
+    <div id="examples-list"></div>
+  </div>
+
+  <div id="viz-tabs">
+    <div class="tab-buttons">
+      <button class="active" onclick="switchTab('table')">Table</button>
+      <button onclick="switchTab('graph')">Graph</button>
+      <button onclick="switchTab('map')">Map</button>
+      <button onclick="switchTab('chart')">Chart</button>
+      <button onclick="switchTab('pathway')">Pathway</button>
+      <button onclick="switchTab('timeline')">Timeline</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Results</h2>
+    <div id="tab-table" class="tab-content active">
+      <div id="results"><div class="muted">No results yet. Enter a query and click Run Query.</div></div>
+      <div id="export-section" style="display: none;">
+        <div class="export-buttons">
+          <button onclick="exportCSV()">Export CSV</button>
+          <button onclick="exportJSON()">Export JSON</button>
+          <button onclick="exportTSV()">Export TSV</button>
+        </div>
+      </div>
+    </div>
+    <div id="tab-graph" class="tab-content"><div id="graph-container"></div></div>
+    <div id="tab-map" class="tab-content"><div id="map-container"></div></div>
+    <div id="tab-chart" class="tab-content"><div id="chart-container"></div></div>
+    <div id="tab-pathway" class="tab-content"><div id="pathway-container"></div></div>
+    <div id="tab-timeline" class="tab-content"><div id="timeline-container"></div></div>
+  </div>
+
+  <div class="panel" style="background: linear-gradient(to bottom, #f0f7f3 0%, #e4f0e8 100%); border-left: 4px solid var(--accent-dark);">
+    <h2 style="display: flex; align-items: center; gap: 0.5rem; color: var(--accent-dark);">
+      &#x1f41f; Koetai: Dual Vision in Health Research Data
+    </h2>
+    <div style="display: grid; gap: 1.5rem; margin-top: 1rem;">
+      <div>
+        <h3 style="font-size: 1.1rem; margin: 0 0 0.5rem 0; color: var(--accent-dark);">Seeing Above and Below</h3>
+        <p style="margin: 0; line-height: 1.7;">
+          The koetai (Anableps anableps), or four-eyed fish, possesses a remarkable adaptation: eyes divided horizontally, allowing it to see simultaneously above and below the waterline. As it navigates the murky waters of mangrove estuaries, it watches for predators above while hunting prey below&mdash;maintaining constant dual awareness of its complex environment.
+        </p>
+      </div>
+      <div>
+        <h3 style="font-size: 1.1rem; margin: 0 0 0.5rem 0; color: var(--accent-dark);">Navigating Health Research Data</h3>
+        <p style="margin: 0; line-height: 1.7;">
+          Similarly, health research data exploration requires dual vision: seeing both the surface patterns in imaging metadata and clinical forms, and the deep structural relationships linking microscopy, cohort data, and biomedical ontologies. Just as the koetai navigates the tangled roots of mangrove forests, researchers navigate the interconnected landscape of OMERO images, REDCap instruments, and linked biomedical knowledge.
+        </p>
+      </div>
+      <div>
+        <h3 style="font-size: 1.1rem; margin: 0 0 0.5rem 0; color: var(--accent-dark);">About This AHRI Edition</h3>
+        <p style="margin: 0 0 0.75rem 0; line-height: 1.7;">
+          This edition of Koetai SPARQL Explorer is dedicated to the <a href="https://www.ahri.org" target="_blank" style="color: var(--accent-dark); font-weight: 600;">Africa Health Research Institute (AHRI)</a>, which works towards the elimination of HIV and TB disease and the optimal health and well-being of under-resourced populations. It provides access to AHRI's linked research data as RDF, including imaging metadata from OMERO, REDCap form schemas, and Sanger microscopy data.
+        </p>
+        <p style="margin: 0; line-height: 1.7; font-style: italic; color: var(--text-muted);">
+          The koetai metaphor reflects how effective health data research requires simultaneous awareness of multiple perspectives: imaging data and clinical context, individual specimens and population cohorts, raw observations and integrated knowledge graphs.
+        </p>
+      </div>
+      <div>
+        <h3 style="font-size: 1.1rem; margin: 0 0 0.5rem 0; color: var(--accent-dark);">Datasets</h3>
+        <ul style="margin: 0; padding-left: 1.5rem; line-height: 2;">
+          <li><strong>AHRI REDCap Forms</strong> &mdash; Form field definitions and structures from the AHRI resource centre</li>
+          <li><strong>OMERO Imaging Metadata</strong> &mdash; Projects, datasets, images, pixels, and annotations from the AHRI OMERO server</li>
+          <li><strong>Sanger Microscopy</strong> &mdash; Whole-slide imaging metadata from the Wellcome Sanger Institute</li>
+        </ul>
+      </div>
+      <div style="padding: 1.25rem; background: #d6eadd; border-radius: 4px; font-size: 0.95rem; color: var(--text-muted); line-height: 1.8;">
+        <div><strong style="color: var(--accent-dark);">AHRI Edition</strong> &mdash; Africa Health Research Institute</div>
+        <div style="margin-top: 0.5rem;">Part of the SemScape family &mdash; Department of Medical Informatics, Amsterdam UMC</div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+let endpoints = {
+  ahri: { name: 'AHRI SPARQL (Default)', url: '/endpoint3' },
+  wikidata: { name: 'Wikidata Query Service', url: 'https://query.wikidata.org/sparql' },
+  dbpedia: { name: 'DBpedia SPARQL', url: 'https://dbpedia.org/sparql' },
+  uniprot: { name: 'UniProt SPARQL', url: 'https://sparql.uniprot.org/sparql' },
+  wikipathways: { name: 'WikiPathways SPARQL', url: 'https://sparql.wikipathways.org/sparql' }
+};
+
+let currentEndpoint = 'ahri';
+let customEndpoints = JSON.parse(localStorage.getItem('customEndpoints_ahri') || '{}');
+let lastResults = null;
+endpoints = { ...endpoints, ...customEndpoints };
+
+function switchEndpoint() {
+  const select = document.getElementById('endpoint-select');
+  if (select.value === 'custom') { openManageEndpoints(); return; }
+  currentEndpoint = select.value;
+  document.getElementById('current-endpoint-url').textContent = endpoints[currentEndpoint].url;
+}
+
+function openManageEndpoints() {
+  renderEndpointList();
+  document.getElementById('manage-modal').classList.add('active');
+}
+
+function closeManageEndpoints() {
+  document.getElementById('manage-modal').classList.remove('active');
+  updateEndpointSelect();
+}
+
+function renderEndpointList() {
+  const container = document.getElementById('endpoint-list');
+  let html = '';
+  for (const [key, ep] of Object.entries(endpoints)) {
+    const isCustom = customEndpoints.hasOwnProperty(key);
+    const isActive = key === currentEndpoint;
+    html += `<div class="endpoint-item ${isActive ? 'active' : ''}"><div class="endpoint-info"><div class="endpoint-name">${ep.name}</div><div class="endpoint-url">${ep.url}</div></div><div class="endpoint-actions">${!isActive ? `<button onclick="setActiveEndpoint('${key}')">Use</button>` : '<button class="active-btn">Active</button>'}${isCustom ? `<button onclick="deleteEndpoint('${key}')">Delete</button>` : ''}</div></div>`;
+  }
+  container.innerHTML = html;
+}
+
+function addCustomEndpoint() {
+  const name = document.getElementById('endpoint-name').value.trim();
+  const url = document.getElementById('endpoint-url').value.trim();
+  if (!name || !url) { showMessage('Please provide both name and URL', 'error'); return; }
+  const key = 'custom_' + Date.now();
+  customEndpoints[key] = { name, url };
+  endpoints[key] = { name, url };
+  localStorage.setItem('customEndpoints_ahri', JSON.stringify(customEndpoints));
+  document.getElementById('endpoint-name').value = '';
+  document.getElementById('endpoint-url').value = '';
+  renderEndpointList();
+  updateEndpointSelect();
+  showMessage('Endpoint added successfully', 'success');
+}
+
+function deleteEndpoint(key) {
+  if (key === currentEndpoint) { showMessage('Cannot delete the active endpoint', 'error'); return; }
+  delete customEndpoints[key];
+  delete endpoints[key];
+  localStorage.setItem('customEndpoints_ahri', JSON.stringify(customEndpoints));
+  renderEndpointList();
+  updateEndpointSelect();
+  showMessage('Endpoint deleted', 'success');
+}
+
+function setActiveEndpoint(key) {
+  currentEndpoint = key;
+  document.getElementById('current-endpoint-url').textContent = endpoints[currentEndpoint].url;
+  document.getElementById('endpoint-select').value = key;
+  renderEndpointList();
+  showMessage('Endpoint switched', 'success');
+}
+
+function updateEndpointSelect() {
+  const select = document.getElementById('endpoint-select');
+  const currentValue = select.value;
+  let html = '<option value="ahri">AHRI SPARQL (Default)</option><option value="wikidata">Wikidata Query Service</option><option value="dbpedia">DBpedia SPARQL</option><option value="uniprot">UniProt SPARQL</option><option value="wikipathways">WikiPathways SPARQL</option>';
+  for (const [key, ep] of Object.entries(customEndpoints)) { html += `<option value="${key}">${ep.name}</option>`; }
+  html += '<option value="custom">Custom Endpoint...</option>';
+  select.innerHTML = html;
+  select.value = currentValue === 'custom' ? currentEndpoint : currentValue;
+}
+
+updateEndpointSelect();
+
+async function runQuery() {
+  const query = document.getElementById('query').value.trim();
+  if (!query) { showMessage('Please enter a SPARQL query', 'error'); return; }
+  showMessage('Running query...', 'success');
+  const endpointUrl = endpoints[currentEndpoint].url;
+  const url = `${endpointUrl}?query=${encodeURIComponent(query)}&format=json`;
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    const data = await response.json();
+    lastResults = data;
+    displayResults(data);
+    showMessage(`Query executed successfully. ${data.results.bindings.length} results returned.`, 'success');
+    document.getElementById('viz-tabs').style.display = 'block';
+    updateVisualizations(data);
+  } catch (error) {
+    let errorMsg = 'Query execution failed. ';
+    if (error.message.includes('Failed to fetch')) { errorMsg += 'This may be due to CORS restrictions or network issues.'; }
+    else { errorMsg += error.message; }
+    showMessage(errorMsg, 'error');
+    document.getElementById('results').innerHTML = `<div style="padding: 2rem; background: #fff5f5; border: 1px solid #f5c6cb; border-radius: 4px;"><h3 style="margin-top: 0; color: #a94442;">Query Error</h3><p><strong>Error:</strong> ${error.message}</p><p><strong>Endpoint:</strong> ${endpointUrl}</p><h4>Possible solutions:</h4><ul><li>Check that the SPARQL endpoint URL is correct and accessible</li><li>Ensure the endpoint supports CORS</li><li>Verify your query syntax is valid SPARQL</li><li>Try a different endpoint from the dropdown</li></ul></div>`;
+  }
+}
+
+function displayResults(data) {
+  const resultsDiv = document.getElementById('results');
+  const vars = data.head.vars;
+  const bindings = data.results.bindings;
+  if (bindings.length === 0) { resultsDiv.innerHTML = '<div class="muted">No results found.</div>'; document.getElementById('export-section').style.display = 'none'; return; }
+  let html = '<div class="results-container"><table><thead><tr>';
+  vars.forEach(v => { html += `<th>${v}</th>`; });
+  html += '</tr></thead><tbody>';
+  bindings.forEach(row => {
+    html += '<tr>';
+    vars.forEach(v => {
+      const value = row[v];
+      if (value) { html += value.type === 'uri' ? `<td><a href="${value.value}" target="_blank">${value.value}</a></td>` : `<td>${value.value}</td>`; }
+      else { html += '<td class="muted">-</td>'; }
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table></div>';
+  resultsDiv.innerHTML = html;
+  document.getElementById('export-section').style.display = 'block';
+}
+
+function updateVisualizations(data) {
+  const vars = data.head.vars, rows = data.results.bindings;
+  renderGraph(vars, rows); renderMap(vars, rows); renderChart(vars, rows); renderPathways(vars, rows); renderTimeline(vars, rows);
+}
+
+function showMessage(text, type) {
+  const msg = document.getElementById('message');
+  msg.textContent = text; msg.className = type;
+  if (type === 'success') { setTimeout(() => { msg.style.display = 'none'; }, 3000); }
+}
+
+function switchTab(tabName) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-buttons button').forEach(b => b.classList.remove('active'));
+  document.getElementById(`tab-${tabName}`).classList.add('active');
+  event.target.classList.add('active');
+  if (tabName === 'map' && window.currentMap) { setTimeout(() => { window.currentMap.invalidateSize(); }, 100); }
+}
+
+function exportCSV() {
+  if (!lastResults) return;
+  const vars = lastResults.head.vars, rows = lastResults.results.bindings;
+  let csv = vars.join(',') + '\n';
+  rows.forEach(row => { csv += vars.map(v => { const val = row[v]; return val ? `"${val.value.replace(/"/g, '""')}"` : ''; }).join(',') + '\n'; });
+  downloadFile(csv, 'results.csv', 'text/csv');
+}
+
+function exportJSON() { if (!lastResults) return; downloadFile(JSON.stringify(lastResults, null, 2), 'results.json', 'application/json'); }
+
+function exportTSV() {
+  if (!lastResults) return;
+  const vars = lastResults.head.vars, rows = lastResults.results.bindings;
+  let tsv = vars.join('\t') + '\n';
+  rows.forEach(row => { tsv += vars.map(v => { const val = row[v]; return val ? val.value : ''; }).join('\t') + '\n'; });
+  downloadFile(tsv, 'results.tsv', 'text/tab-separated-values');
+}
+
+function downloadFile(content, filename, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
+function renderGraph(vars, rows) {
+  const container = document.getElementById('graph-container'); container.innerHTML = '';
+  if (vars.length < 2) { container.innerHTML = '<div class="muted" style="padding:2rem;text-align:center;">Graph view requires at least 2 variables.</div>'; return; }
+  const graphData = extractGraphData(vars, rows);
+  if (graphData.nodes.length === 0) { container.innerHTML = '<div class="muted" style="padding:2rem;text-align:center;">No graph data to display</div>'; return; }
+  const width = container.clientWidth || 800, height = 500;
+  const svg = d3.select(container).append('svg').attr('width', width).attr('height', height);
+  const simulation = d3.forceSimulation(graphData.nodes)
+    .force('link', d3.forceLink(graphData.links).id(d => d.id).distance(120))
+    .force('charge', d3.forceManyBody().strength(-400))
+    .force('center', d3.forceCenter(width / 2, height / 2))
+    .force('collision', d3.forceCollide().radius(50));
+  const link = svg.append('g').selectAll('path').data(graphData.links).join('path').attr('class', 'link').attr('marker-end', 'url(#arrowhead)');
+  svg.append('defs').append('marker').attr('id', 'arrowhead').attr('viewBox', '-0 -5 10 10').attr('refX', 25).attr('refY', 0).attr('orient', 'auto').attr('markerWidth', 8).attr('markerHeight', 8).append('svg:path').attr('d', 'M 0,-5 L 10,0 L 0,5').attr('fill', '#3a8f6a').style('stroke', 'none');
+  const linkLabel = svg.append('g').selectAll('text').data(graphData.links).join('text').attr('class', 'link-label').text(d => d.label.length > 30 ? d.label.substring(0, 30) + '...' : d.label);
+  const node = svg.append('g').selectAll('g').data(graphData.nodes).join('g').attr('class', 'node')
+    .call(d3.drag().on('start', (e, d) => { if (!e.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; }).on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; }).on('end', (e, d) => { if (!e.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }));
+  node.append('circle').attr('r', 15);
+  node.append('text').text(d => d.label.length > 20 ? d.label.substring(0, 20) + '...' : d.label).attr('x', 0).attr('y', -20).style('text-anchor', 'middle').style('font-size', '11px').style('font-weight', '600').style('fill', '#2a2a2a');
+  node.append('title').text(d => d.label);
+  simulation.on('tick', () => {
+    link.attr('d', d => { const dx = d.target.x - d.source.x, dy = d.target.y - d.source.y, dr = Math.sqrt(dx*dx + dy*dy); return `M${d.source.x},${d.source.y}A${dr},${dr} 0 0,1 ${d.target.x},${d.target.y}`; });
+    linkLabel.attr('x', d => (d.source.x + d.target.x) / 2).attr('y', d => (d.source.y + d.target.y) / 2);
+    node.attr('transform', d => `translate(${d.x},${d.y})`);
+  });
+}
+
+function extractGraphData(vars, rows) {
+  const nodes = new Map(), links = [];
+  let sVar = vars.find(v => v.toLowerCase().includes('subject') || v.toLowerCase() === 's') || vars[0];
+  let pVar = vars.find(v => v.toLowerCase().includes('predicate') || v.toLowerCase() === 'p') || (vars.length >= 3 ? vars[1] : null);
+  let oVar = vars.find(v => v.toLowerCase().includes('object') || v.toLowerCase() === 'o') || vars[vars.length - 1];
+  rows.forEach(row => {
+    if (row[sVar] && row[oVar]) {
+      const s = row[sVar].value, o = row[oVar].value;
+      const p = pVar && row[pVar] ? row[pVar].value : 'relates to';
+      if (!nodes.has(s)) nodes.set(s, { id: s, label: s.split('/').pop().split('#').pop() });
+      if (!nodes.has(o)) nodes.set(o, { id: o, label: o.split('/').pop().split('#').pop() });
+      links.push({ source: s, target: o, label: p.split('/').pop().split('#').pop() });
+    }
+  });
+  return { nodes: Array.from(nodes.values()), links };
+}
+
+function renderMap(vars, rows) {
+  const container = document.getElementById('map-container'); container.innerHTML = '';
+  const locations = extractLocations(vars, rows);
+  if (locations.length === 0) { container.innerHTML = '<div class="muted" style="padding:2rem;text-align:center;">No geographic data detected.</div>'; return; }
+  const map = L.map(container).setView([locations[0].lat, locations[0].lon], 4);
+  window.currentMap = map;
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+  locations.forEach(loc => { const m = L.marker([loc.lat, loc.lon]).addTo(map); if (loc.label) m.bindPopup(loc.label); });
+  if (locations.length > 1) map.fitBounds(L.latLngBounds(locations.map(l => [l.lat, l.lon])), { padding: [50, 50] });
+}
+
+function extractLocations(vars, rows) {
+  const locations = [];
+  const latVar = vars.find(v => v.toLowerCase().includes('lat'));
+  const lonVar = vars.find(v => v.toLowerCase().includes('lon') || v.toLowerCase().includes('long'));
+  const labelVar = vars.find(v => v.toLowerCase().includes('label') || v.toLowerCase().includes('name'));
+  if (latVar && lonVar) {
+    rows.forEach(row => {
+      if (row[latVar] && row[lonVar]) { const lat = parseFloat(row[latVar].value), lon = parseFloat(row[lonVar].value); if (!isNaN(lat) && !isNaN(lon)) locations.push({ lat, lon, label: labelVar && row[labelVar] ? row[labelVar].value : `${lat}, ${lon}` }); }
+    });
+  }
+  const pointVar = vars.find(v => v.toLowerCase().includes('point') || v.toLowerCase().includes('location') || v.toLowerCase().includes('geo'));
+  if (pointVar && locations.length === 0) {
+    rows.forEach(row => {
+      if (row[pointVar]) { const match = row[pointVar].value.match(/POINT\s*\(\s*([-\d.]+)\s+([-\d.]+)\s*\)/i); if (match) { const lon = parseFloat(match[1]), lat = parseFloat(match[2]); if (!isNaN(lat) && !isNaN(lon)) locations.push({ lat, lon, label: labelVar && row[labelVar] ? row[labelVar].value : row[pointVar].value }); } }
+    });
+  }
+  return locations;
+}
+
+function renderChart(vars, rows) {
+  const container = document.getElementById('chart-container'); container.innerHTML = '';
+  const numericVars = [];
+  vars.forEach(v => { let isNum = true; for (let i = 0; i < Math.min(rows.length, 10); i++) { if (rows[i][v] && isNaN(parseFloat(rows[i][v].value))) { isNum = false; break; } } if (isNum && rows.some(r => r[v])) numericVars.push(v); });
+  if (numericVars.length === 0) { container.innerHTML = '<div class="muted" style="padding:2rem;text-align:center;">No numeric data detected.</div>'; return; }
+  const numericVar = numericVars[0], labelVar = vars.find(v => v !== numericVar);
+  const data = rows.map((row, idx) => ({ label: labelVar && row[labelVar] ? row[labelVar].value.split('/').pop().split('#').pop() : `Row ${idx+1}`, value: row[numericVar] ? parseFloat(row[numericVar].value) : 0 }));
+  const width = container.clientWidth || 800, height = 400, margin = { top: 20, right: 20, bottom: 80, left: 60 };
+  const svg = d3.select(container).append('svg').attr('width', width).attr('height', height);
+  const x = d3.scaleBand().domain(data.map(d => d.label)).range([margin.left, width - margin.right]).padding(0.1);
+  const y = d3.scaleLinear().domain([0, d3.max(data, d => d.value)]).nice().range([height - margin.bottom, margin.top]);
+  svg.append('g').selectAll('rect').data(data).join('rect').attr('x', d => x(d.label)).attr('y', d => y(d.value)).attr('height', d => y(0) - y(d.value)).attr('width', x.bandwidth()).attr('fill', '#a8d5ba').attr('stroke', '#1a6b4a').attr('stroke-width', 1)
+    .on('mouseover', function(event, d) { d3.select(this).attr('fill', '#7cc49a'); showTooltip(event, `<strong>${d.label}</strong><br>${numericVar}: ${d.value}`); })
+    .on('mouseout', function() { d3.select(this).attr('fill', '#a8d5ba'); hideTooltip(); });
+  svg.append('g').attr('transform', `translate(0,${height-margin.bottom})`).call(d3.axisBottom(x)).selectAll('text').attr('transform', 'rotate(-45)').style('text-anchor', 'end').style('font-size', '10px');
+  svg.append('g').attr('transform', `translate(${margin.left},0)`).call(d3.axisLeft(y)).style('font-size', '11px');
+}
+
+function showTooltip(event, html) {
+  let t = document.querySelector('.chart-tooltip');
+  if (!t) { t = document.createElement('div'); t.className = 'chart-tooltip'; document.body.appendChild(t); }
+  t.innerHTML = html; t.style.left = (event.pageX+10)+'px'; t.style.top = (event.pageY-28)+'px'; t.style.opacity = 1;
+}
+function hideTooltip() { const t = document.querySelector('.chart-tooltip'); if (t) t.style.opacity = 0; }
+
+function renderPathways(vars, rows) {
+  const container = document.getElementById('pathway-container'); container.innerHTML = '';
+  container.innerHTML = '<div class="muted" style="padding:2rem;text-align:center;">Pathway view supports variables containing "pathway", "protein", "gene", "interaction".</div>';
+}
+
+function renderTimeline(vars, rows) {
+  const container = document.getElementById('timeline-container'); container.innerHTML = '';
+  const dateVar = vars.find(v => v.toLowerCase().includes('date') || v.toLowerCase().includes('time') || v.toLowerCase().includes('year') || v.toLowerCase().includes('created') || v.toLowerCase().includes('modified'));
+  if (!dateVar) { container.innerHTML = '<div class="muted" style="padding:2rem;text-align:center;">No temporal data detected.</div>'; return; }
+  const contentVars = vars.filter(v => v !== dateVar);
+  const timeline = [];
+  rows.forEach(row => {
+    if (row[dateVar]) { const date = new Date(row[dateVar].value); if (!isNaN(date.getTime())) { const content = contentVars.map(v => row[v] ? `${v}: ${row[v].value}` : '').filter(Boolean).join(', '); timeline.push({ date, dateStr: date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }), content: content || row[dateVar].value }); } }
+  });
+  timeline.sort((a, b) => a.date - b.date);
+  container.innerHTML = timeline.map(item => `<div class="timeline-item"><div class="timeline-date">${item.dateStr}</div><div class="timeline-content">${item.content}</div></div>`).join('');
+}
+
+function escapeHtml(text) { const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
+
+function clearQuery() {
+  document.getElementById('query').value = '';
+  document.getElementById('viz-tabs').style.display = 'none';
+  document.getElementById('results').innerHTML = '<div class="muted">Query cleared. Enter a new query and click Run Query.</div>';
+}
+
+function loadExample() {
+  document.getElementById('query').value =
+`PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX ome: <http://www.openmicroscopy.org/Schemas/OME/2016-06#>
+PREFIX core: <http://www.openmicroscopy.org/rdf/2016-06/ome_core/>
+SELECT ?project ?name WHERE {
+  ?project rdf:type ome:Project .
+  ?project core:Name ?name .
+}
+LIMIT 20`;
+  document.getElementById('viz-tabs').style.display = 'none';
+  document.getElementById('results').innerHTML = '<div class="muted">Example query loaded. Click Run Query to execute.</div>';
+}
+
+// ── Shared Examples Browser (reads from IndexedDB written by examples-browser2.html) ──
+const EXAMPLES_DB_NAME = 'sparql-examples-harvest';
+const EXAMPLES_DB_VERSION = 1;
+const EXAMPLES_STORE = 'harvested';
+let storedExamples = [];
+let filteredStoredExamples = [];
+
+function openExamplesDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(EXAMPLES_DB_NAME, EXAMPLES_DB_VERSION);
+    req.onupgradeneeded = () => { if (!req.result.objectStoreNames.contains(EXAMPLES_STORE)) req.result.createObjectStore(EXAMPLES_STORE); };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function getStoredExamples() {
+  const db = await openExamplesDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(EXAMPLES_STORE, 'readonly');
+    const store = tx.objectStore(EXAMPLES_STORE);
+    const req = store.get('examples');
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function openExamplesBrowser() {
+  const panel = document.getElementById('examples-panel');
+  panel.style.display = 'block';
+  document.getElementById('examples-list').innerHTML = '<div class="muted">Loading…</div>';
+  try {
+    const data = await getStoredExamples();
+    if (!data || !data.examples || data.examples.length === 0) {
+      document.getElementById('examples-list').innerHTML = '<div class="muted">No stored examples found. Visit the <a href="examples-browser2.html">Examples Browser</a> first to harvest examples.</div>';
+      return;
+    }
+    storedExamples = data.examples;
+    filteredStoredExamples = storedExamples;
+    renderStoredExamples();
+  } catch (err) {
+    document.getElementById('examples-list').innerHTML = '<div class="muted">Error reading stored examples: ' + escHtml(err.message) + '</div>';
+  }
+}
+
+function closeExamplesBrowser() {
+  document.getElementById('examples-panel').style.display = 'none';
+  document.getElementById('examples-filter').value = '';
+}
+
+function filterStoredExamples() {
+  const q = document.getElementById('examples-filter').value.toLowerCase().trim();
+  if (!q) { filteredStoredExamples = storedExamples; }
+  else {
+    filteredStoredExamples = storedExamples.filter(ex => {
+      const hay = [ex.id, ex.title, ex.description, ...(ex.tags || []), ...(ex.endpoints || []).map(e => typeof e === 'string' ? e : (e.id || e.url || ''))].join(' ').toLowerCase();
+      return hay.includes(q);
+    });
+  }
+  renderStoredExamples();
+}
+
+function renderStoredExamples() {
+  const list = document.getElementById('examples-list');
+  if (filteredStoredExamples.length === 0) { list.innerHTML = '<div class="muted">No examples match the filter.</div>'; return; }
+  const show = filteredStoredExamples.slice(0, 200);
+  list.innerHTML = show.map((ex, i) => {
+    const tags = (ex.tags || []).map(t => '<span style="display:inline-block;background:var(--accent-soft,#e0f0e6);color:var(--accent-dark,#1a6b3c);padding:0.1rem 0.45rem;border-radius:4px;font-size:0.78rem;margin:0.15rem;">' + escHtml(t) + '</span>').join('');
+    const eps = (ex.endpoints || []).map(e => typeof e === 'string' ? e : (e.id || e.url || '')).join(', ');
+    return '<div onclick="selectStoredExample(' + i + ')" style="cursor:pointer;padding:0.65rem 0.85rem;border:1px solid var(--border-soft,#d0d7de);border-radius:8px;margin-bottom:0.5rem;transition:background 0.15s;" onmouseenter="this.style.background=\'var(--accent-soft,#e0f0e6)\'" onmouseleave="this.style.background=\'transparent\'">'
+      + '<div style="font-weight:600;margin-bottom:0.2rem;">' + escHtml(ex.title || ex.id || 'Untitled') + '</div>'
+      + (ex.description ? '<div style="font-size:0.88rem;color:var(--text-muted,#57606a);margin-bottom:0.3rem;">' + escHtml(ex.description).substring(0, 200) + '</div>' : '')
+      + (tags ? '<div style="margin-bottom:0.2rem;">' + tags + '</div>' : '')
+      + (eps ? '<div style="font-size:0.8rem;color:var(--text-muted,#57606a);">Endpoints: ' + escHtml(eps) + '</div>' : '')
+      + '</div>';
+  }).join('');
+  if (filteredStoredExamples.length > 200) list.innerHTML += '<div class="muted">Showing 200 of ' + filteredStoredExamples.length + ' examples. Use the filter to narrow results.</div>';
+}
+
+function selectStoredExample(idx) {
+  const ex = filteredStoredExamples[idx];
+  if (!ex) return;
+  document.getElementById('query').value = ex.query || '';
+  if (ex.endpoints && ex.endpoints.length > 0) attemptEndpointSwitch(ex.endpoints);
+  closeExamplesBrowser();
+  document.getElementById('viz-tabs').style.display = 'none';
+  document.getElementById('results').innerHTML = '<div class="muted">Example loaded. Click Run Query to execute.</div>';
+}
+
+function attemptEndpointSwitch(exEndpoints) {
+  if (!exEndpoints || exEndpoints.length === 0) return;
+  const ids = exEndpoints.map(e => typeof e === 'string' ? e : (e.id || '')).map(s => s.toLowerCase().trim()).filter(Boolean);
+  const urls = exEndpoints.map(e => (typeof e === 'object' && e.url) ? e.url : '').filter(Boolean);
+  // endpoints is an object map in this file
+  for (const [key, val] of Object.entries(endpoints)) {
+    if (ids.includes(key.toLowerCase()) || urls.includes(val.url)) {
+      currentEndpoint = key;
+      const sel = document.getElementById('endpoint-select');
+      if (sel) sel.value = key;
+      const urlDisp = document.getElementById('current-endpoint-url');
+      if (urlDisp) urlDisp.textContent = val.url;
+      return;
+    }
+  }
+}
+
+function escHtml(t) { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; }
+</script>
+
+</body>
+</html>
