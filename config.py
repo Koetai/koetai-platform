@@ -56,6 +56,10 @@ ORCID_API_URL     = "https://pub.orcid.org/v3.0"
 QLEVER_PLATFORM_URL  = os.environ.get("QLEVER_PLATFORM_URL", "http://localhost:7030")
 FUSEKI_BASE_URL      = os.environ.get("FUSEKI_BASE_URL", "http://localhost:3030")
 FUSEKI_DATASET       = os.environ.get("FUSEKI_DATASET", "koetai")
+# Leave blank for an unsecured Fuseki. A Fuseki started with ADMIN_PASSWORD set
+# (as the docker image does) rejects writes with 401 without these.
+FUSEKI_USER          = os.environ.get("FUSEKI_USER", "")
+FUSEKI_PASSWORD      = os.environ.get("FUSEKI_PASSWORD", "")
 VIRTUOSO_URL         = os.environ.get("VIRTUOSO_URL", "http://localhost:8890")
 VIRTUOSO_USER        = os.environ.get("VIRTUOSO_USER", "")
 VIRTUOSO_PASSWORD    = os.environ.get("VIRTUOSO_PASSWORD", "")

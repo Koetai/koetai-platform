@@ -1,7 +1,30 @@
+# ── Web ───────────────────────────────────────────────────────────────────────
 Flask==3.1.2
 flask-cors==6.0.2
 Flask-Login==0.6.3
+Werkzeug==3.1.7
+Jinja2==3.1.6
+python-dotenv==1.2.2
+gunicorn==23.0.0
+
+# ── HTTP / auth ───────────────────────────────────────────────────────────────
 requests==2.32.5
 requests-oauthlib==2.0.0
+
+# ── RDF ───────────────────────────────────────────────────────────────────────
+rdflib==7.2.1
+PyYAML==6.0.3
+morph_kgc==2.10.0
+
+# ── Web harvesting ────────────────────────────────────────────────────────────
+beautifulsoup4==4.14.3
+
+# ── Shape inference and reasoning ─────────────────────────────────────────────
+# These were installed only in a second venv (config.SHEXER_VENV, which pointed
+# at koetai-admin's venv) and were missing here, so `pip install -r` produced an
+# install where shape inference and OWL reasoning failed at runtime. Listed here
+# so one environment can run the whole app; SHEXER_VENV can then just be this
+# interpreter (see .env.example).
 shexer==2.7.2
-Jinja2==3.1.6
+owlrl==7.1.4
+lightrdf==0.4.0

@@ -1,0 +1,143 @@
+##############################################################################
+# Koetai — local single-user install.
+#
+#   cp .env.example .env      # optional; the defaults below work as-is
+#   docker compose up -d      # → http://localhost:3002
+#
+# Ships with Fuseki, because a local install should keep your data without you
+# having to know anything about the engine. Any of the supported stores can be
+# run instead — each is a profile:
+#
+#   docker compose --profile oxigraph up -d     # lighter than Fuseki
+#   docker compose --profile virtuoso up -d
+#   docker compose --profile qlever up -d       # read-heavy; see the note below
+#
+# Profiles are additive, so you can run several at once and pick the backend per
+# dataset. Whichever you run, set the dataset's `platform` field to match.
+##############################################################################
+
+services:
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # The application. Same image as the hosted platform; KOETAI_MODE makes it a
+  # single-user install with no accounts and no ORCID.
+  # ───────────────────────────────────────────────────────────────────────────
+  koetai:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "${KOETAI_PORT:-3002}:3002"
+    environment:
+      - KOETAI_MODE=local
+      - BASE_URL=${BASE_URL:-http://localhost:3002}
+      - KOETAI_DB_PATH=/data/koetai.db
+      - UPLOAD_DIR=/data/uploads
+      # Container service names, not localhost.
+      - FUSEKI_BASE_URL=http://fuseki:3030
+      - FUSEKI_DATASET=${FUSEKI_DATASET:-koetai}
+      # The Fuseki image starts secured, so writes need these.
+      - FUSEKI_USER=${FUSEKI_USER:-admin}
+      - FUSEKI_PASSWORD=${FUSEKI_ADMIN_PASSWORD:-change-me}
+      - QLEVER_PLATFORM_URL=http://qlever:7030
+      - OXIGRAPH_URL=http://oxigraph:7878
+      - VIRTUOSO_URL=http://virtuoso:8890
+      - VIRTUOSO_USER=${VIRTUOSO_USER:-dba}
+      - VIRTUOSO_PASSWORD=${VIRTUOSO_PASSWORD:-dba}
+      # One interpreter runs everything in this image, so the shape-inference
+      # and OWL-reasoning subprocesses just re-use it.
+      - SHEXER_VENV=/usr/local/bin/python3
+    volumes:
+      - koetai-data:/data
+    networks:
+      - koetai
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Fuseki — the default store. Durable, speaks the Graph Store Protocol.
+  # ───────────────────────────────────────────────────────────────────────────
+  fuseki:
+    image: stain/jena-fuseki:latest
+    restart: unless-stopped
+    environment:
+      - JVM_ARGS=-Xmx${FUSEKI_HEAP:-2g}
+      - ADMIN_PASSWORD=${FUSEKI_ADMIN_PASSWORD:-change-me}
+      - FUSEKI_DATASET_1=${FUSEKI_DATASET:-koetai}
+    expose:
+      - "3030"
+    volumes:
+      # Mount at /fuseki, not /fuseki/databases: the image's entrypoint creates
+      # databases/ itself with the ownership the unprivileged server needs. A
+      # volume mounted directly on databases/ arrives root-owned and Fuseki dies
+      # with "Not writable: /fuseki/databases".
+      - fuseki-data:/fuseki
+    networks:
+      - koetai
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3030/$$/ping || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Oxigraph — smallest durable option. Good default on a laptop.
+  # ───────────────────────────────────────────────────────────────────────────
+  oxigraph:
+    image: ghcr.io/oxigraph/oxigraph:latest
+    restart: unless-stopped
+    profiles: ["oxigraph"]
+    command: serve --location /data --bind 0.0.0.0:7878
+    expose:
+      - "7878"
+    volumes:
+      - oxigraph-data:/data
+    networks:
+      - koetai
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Virtuoso. Writes go to its -auth endpoints, hence VIRTUOSO_USER/PASSWORD.
+  # ───────────────────────────────────────────────────────────────────────────
+  virtuoso:
+    image: openlink/virtuoso-opensource-7:latest
+    restart: unless-stopped
+    profiles: ["virtuoso"]
+    environment:
+      - DBA_PASSWORD=${VIRTUOSO_PASSWORD:-dba}
+      - VIRT_Parameters_DirsAllowed=/, /data
+    expose:
+      - "8890"
+    volumes:
+      - virtuoso-data:/database
+    networks:
+      - koetai
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # QLever — fastest for large read-heavy data, but the worst fit for uploads:
+  # it has no Graph Store Protocol, and it DISCARDS SPARQL UPDATEs on shutdown
+  # unless --persist-updates is set (it is, below). Bulk data is meant to be
+  # indexed offline rather than inserted. Prefer Fuseki/Oxigraph for a local
+  # install unless you specifically want QLever's query performance.
+  # ───────────────────────────────────────────────────────────────────────────
+  qlever:
+    image: adfreiburg/qlever:latest
+    restart: unless-stopped
+    profiles: ["qlever"]
+    entrypoint: ["/qlever/qlever-server"]
+    command: >
+      -i /data/platform -p 7030 -m ${QLEVER_MEMORY:-5G} -c 2G -s 30s
+      -a ${QLEVER_TOKEN:-platform} --persist-updates
+    expose:
+      - "7030"
+    volumes:
+      - qlever-data:/data
+    networks:
+      - koetai
+
+volumes:
+  koetai-data:
+  fuseki-data:
+  oxigraph-data:
+  virtuoso-data:
+  qlever-data:
+
+networks:
+  koetai:
+    driver: bridge

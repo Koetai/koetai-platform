@@ -19,7 +19,7 @@ bearer token, and loads bulk data by building an index offline.
 """
 from pathlib import Path
 
-from requests.auth import HTTPDigestAuth
+from requests.auth import HTTPBasicAuth, HTTPDigestAuth
 
 import config
 from services import qlever
@@ -87,6 +87,12 @@ def _virtuoso_auth():
     return None
 
 
+def _fuseki_auth():
+    if config.FUSEKI_USER:
+        return HTTPBasicAuth(config.FUSEKI_USER, config.FUSEKI_PASSWORD)
+    return None
+
+
 # Each builder is called lazily so an unconfigured store costs nothing and a
 # broken one cannot break import of this module.
 _BUILDERS = {
@@ -98,6 +104,7 @@ _BUILDERS = {
         query_path="/sparql",
         update_path="/update",
         gsp_path="/data",
+        auth=_fuseki_auth(),
     ),
 
     # Virtuoso's writable endpoints are the -auth variants and expect digest auth.

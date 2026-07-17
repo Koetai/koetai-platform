@@ -1,0 +1,17 @@
+# Keep the build context small and secrets out of the image.
+.env
+venv/
+.venv/
+.git/
+uploads/
+db/*.db
+db/*.db-shm
+db/*.db-wal
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.DS_Store
