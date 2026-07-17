@@ -92,7 +92,8 @@ KOETAI_MODE=local BASE_URL=http://localhost:3002 python3 app.py
 
 ## Triplestores
 
-A dataset's backend is chosen per dataset. Any of these open-source stores work:
+A dataset's backend is chosen per dataset (`platform` column). Any of these
+open-source stores work:
 
 **qlever** · **fuseki** · **virtuoso** · **oxigraph** · **blazegraph** · **rdf4j**
 
@@ -103,6 +104,18 @@ Protocol, so supporting another compliant store is a few lines in
 > **QLever and durability**: QLever holds SPARQL UPDATEs in memory unless the
 > server is started with `--persist-updates` (Qleverfile: `PERSIST_UPDATES = true`).
 > Without it, uploaded data is silently lost when the engine stops.
+
+### Federation datasets (Comunica)
+
+A dataset with `platform='comunica'` is **virtual**: it stores no data of its own
+and instead federates every query, at request time, across a list of external
+sources (SPARQL endpoints, RDF files, TPF) held in its `sources` column. Uploads
+don't apply — the dataset *is* its source list. Powered by
+[Comunica](https://comunica.dev) (`npm install -g @comunica/query-sparql@^3`).
+
+Reliability follows the sources: if a remote endpoint is down or rate-limits, the
+query surfaces that error rather than partial data. Use it to join your own data
+against public knowledge graphs without copying them in.
 
 ## Setup
 

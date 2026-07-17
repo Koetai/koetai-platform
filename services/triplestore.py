@@ -23,6 +23,7 @@ from requests.auth import HTTPBasicAuth, HTTPDigestAuth
 
 import config
 from services import qlever
+from services.comunica import ComunicaStore, parse_sources
 from services.sparql_http import SparqlHttpStore, build_scope
 
 DEFAULT_BACKEND = "qlever"
@@ -143,6 +144,10 @@ _BUILDERS = {
         update_path="/statements",
         gsp_path="/rdf-graphs/service",
     ),
+
+    # Comunica is a federation engine, not a store. Built with no sources here so
+    # available() can probe it; get() below supplies each dataset's real sources.
+    "comunica": lambda: ComunicaStore(sources=[]),
 }
 
 SUPPORTED = tuple(_BUILDERS)
@@ -159,6 +164,16 @@ def get(ds_row):
         platform = ds_row["platform"]
     except (KeyError, IndexError, TypeError):
         platform = None
+
+    # Comunica is the one backend configured per-dataset: its "sources" column is
+    # the federation target list, so it can't be built from global config alone.
+    if platform == "comunica":
+        try:
+            raw_sources = ds_row["sources"]
+        except (KeyError, IndexError, TypeError):
+            raw_sources = None
+        return ComunicaStore(parse_sources(raw_sources))
+
     return get_by_name(platform or DEFAULT_BACKEND)
 
 

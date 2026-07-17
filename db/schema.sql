@@ -26,7 +26,10 @@ CREATE TABLE IF NOT EXISTS datasets (
     description TEXT,
     graph_base  TEXT    NOT NULL UNIQUE,   -- base URI for named graphs
     port        INTEGER,                   -- QLever instance port (NULL = shared)
-    platform    TEXT    NOT NULL DEFAULT 'qlever' CHECK(platform IN ('qlever','fuseki')),
+    platform    TEXT    NOT NULL DEFAULT 'qlever'
+                CHECK(platform IN ('qlever','fuseki','virtuoso','oxigraph',
+                                   'blazegraph','rdf4j','comunica')),
+    sources     TEXT,                      -- comunica only: federation sources, one URL per line
     is_public    INTEGER NOT NULL DEFAULT 1,
     fdp_license  TEXT    NOT NULL DEFAULT 'https://creativecommons.org/licenses/by/4.0/',
     fdp_version  TEXT    NOT NULL DEFAULT '1.0',

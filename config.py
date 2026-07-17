@@ -91,6 +91,10 @@ OXIGRAPH_URL         = os.environ.get("OXIGRAPH_URL", "http://localhost:7878")
 BLAZEGRAPH_URL       = os.environ.get("BLAZEGRAPH_URL", "http://localhost:9999/bigdata")
 RDF4J_URL            = os.environ.get("RDF4J_URL", "http://localhost:8080/rdf4j-server")
 RDF4J_REPO           = os.environ.get("RDF4J_REPO", "koetai")
+# Comunica: a federation *engine*, not a store. Datasets with platform='comunica'
+# federate over a source list rather than holding uploaded data.
+COMUNICA_BIN         = os.environ.get("COMUNICA_BIN", "comunica-sparql")
+COMUNICA_TIMEOUT     = int(os.environ.get("COMUNICA_TIMEOUT", "120"))
 BASE_URL          = os.environ.get("BASE_URL", "https://koetai.semscape.org")
 UPLOAD_DIR        = Path(os.environ.get("UPLOAD_DIR", "/home/debian/koetai-platform/uploads"))
 DEPLOY_DIR        = Path(os.environ.get("DEPLOY_DIR", "/home/debian/qlever-sparql-deployment"))
