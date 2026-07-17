@@ -53,16 +53,55 @@ Flask (Python)
 
 ---
 
+## Two modes
+
+The same codebase runs as the hosted community platform or as a single-user
+install on your own machine. `KOETAI_MODE` picks which.
+
+| | `community` | `local` |
+|---|---|---|
+| Who it's for | the hosted site at koetai.semscape.org | one person, one machine |
+| Sign-in | ORCID OAuth, invitation-only | none — auto-signed-in as a single user |
+| Needs ORCID credentials | yes | no |
+| Owner in URLs | the user's ORCID iD | `local` (override with `LOCAL_ORCID`) |
+
+`community` is the default. A local install needs no ORCID app and no
+invitation; the ORCID block in `.env` can stay blank.
+
+```bash
+KOETAI_MODE=local BASE_URL=http://localhost:3002 python3 app.py
+```
+
+## Triplestores
+
+A dataset's backend is chosen per dataset. Any of these open-source stores work:
+
+**qlever** · **fuseki** · **virtuoso** · **oxigraph** · **blazegraph** · **rdf4j**
+
+All but QLever are reached over SPARQL 1.1 Query/Update plus the Graph Store
+Protocol, so supporting another compliant store is a few lines in
+`services/triplestore.py`. Configure only the ones you run — see `.env.example`.
+
+> **QLever and durability**: QLever holds SPARQL UPDATEs in memory unless the
+> server is started with `--persist-updates` (Qleverfile: `PERSIST_UPDATES = true`).
+> Without it, uploaded data is silently lost when the engine stops.
+
 ## Setup
 
 ### Prerequisites
 
 - Python 3.11+
-- [QLever](https://github.com/ad-freiburg/qlever) running on a local port
+- A triplestore — [QLever](https://github.com/ad-freiburg/qlever),
+  [Fuseki](https://jena.apache.org/documentation/fuseki2/),
+  [Virtuoso](https://github.com/openlink/virtuoso-opensource),
+  [Oxigraph](https://github.com/oxigraph/oxigraph), Blazegraph or RDF4J
+- Caddy (for HTTPS / reverse proxy) — not needed for a local install
+
+Optional — only for the shapes, reasoning and diagram features:
+
 - [Apache Jena](https://jena.apache.org/) binaries (`riot`, `infer`)
 - [RUDOF](https://github.com/rudof-project/rudof) installed as `/usr/bin/rudof`
 - Docker (for rdf-config)
-- Caddy (for HTTPS / reverse proxy)
 
 ### Install
 
@@ -78,17 +117,19 @@ pip install -r requirements.txt
 
 ```bash
 cp .env.example .env
-# edit .env — set SECRET_KEY, ORCID credentials, BASE_URL, paths
+# community: set SECRET_KEY, ORCID credentials, BASE_URL, paths
+# local:     set KOETAI_MODE=local — the ORCID settings can stay blank
 ```
 
 Key `.env` variables:
 
 | Variable | Description |
 |---|---|
-| `SECRET_KEY` | Flask session secret |
-| `ORCID_CLIENT_ID` | ORCID developer app client ID |
-| `ORCID_CLIENT_SECRET` | ORCID developer app client secret |
-| `ORCID_REDIRECT_URI` | e.g. `https://yourdomain.org/auth/callback` |
+| `KOETAI_MODE` | `community` (default) or `local` — see [Two modes](#two-modes) |
+| `SECRET_KEY` | Flask session secret. Auto-generated per boot in `local` |
+| `ORCID_CLIENT_ID` | ORCID developer app client ID — *community only* |
+| `ORCID_CLIENT_SECRET` | ORCID developer app client secret — *community only* |
+| `ORCID_REDIRECT_URI` | e.g. `https://yourdomain.org/auth/callback` — *community only* |
 | `BASE_URL` | Public base URL |
 | `QLEVER_PLATFORM_URL` | QLever instance URL (default `http://localhost:7030`) |
 | `DEPLOY_DIR` | Path to qlever-sparql-deployment directory |

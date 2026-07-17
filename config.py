@@ -1,13 +1,50 @@
 import os
+import secrets
 from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).parent / ".env")
 
-SECRET_KEY        = os.environ["SECRET_KEY"]
-ORCID_CLIENT_ID   = os.environ["ORCID_CLIENT_ID"]
-ORCID_CLIENT_SECRET = os.environ["ORCID_CLIENT_SECRET"]
-ORCID_REDIRECT_URI  = os.environ["ORCID_REDIRECT_URI"]
+# ── Mode ──────────────────────────────────────────────────────────────────────
+# community: the hosted, multi-tenant site — ORCID sign-in, invitation-gated.
+# local:     a single-user install on your own machine — no accounts, no ORCID.
+# The two run the same code; local simply skips the parts that only make sense
+# when strangers share an instance.
+KOETAI_MODE = os.environ.get("KOETAI_MODE", "community").strip().lower()
+if KOETAI_MODE not in ("community", "local"):
+    raise RuntimeError(
+        f"KOETAI_MODE must be 'community' or 'local', not {KOETAI_MODE!r}"
+    )
+IS_LOCAL = KOETAI_MODE == "local"
+
+# The single user a local install acts as. Keeping an ORCID-shaped slot means the
+# /u/<owner>/<slug> URL space, graph URIs and FDP catalogs work unchanged.
+LOCAL_ORCID = os.environ.get("LOCAL_ORCID", "local")
+LOCAL_USER_NAME = os.environ.get("LOCAL_USER_NAME", "Local User")
+
+
+def _required(name: str, local_default: str = "") -> str:
+    """Config that community mode cannot run without, but local mode never uses.
+
+    Failing loudly here beats an ImportError-shaped KeyError at startup.
+    """
+    value = os.environ.get(name)
+    if value:
+        return value
+    if IS_LOCAL:
+        return local_default
+    raise RuntimeError(
+        f"{name} is required when KOETAI_MODE=community. "
+        f"Set it in .env, or use KOETAI_MODE=local for a single-user install."
+    )
+
+
+# A local install has no shared sessions to protect, so a per-boot key is fine:
+# the only cost is that it logs you out on restart, and local mode auto-signs-in.
+SECRET_KEY          = _required("SECRET_KEY", local_default=secrets.token_hex(32))
+ORCID_CLIENT_ID     = _required("ORCID_CLIENT_ID")
+ORCID_CLIENT_SECRET = _required("ORCID_CLIENT_SECRET")
+ORCID_REDIRECT_URI  = _required("ORCID_REDIRECT_URI")
 
 ORCID_AUTH_URL    = "https://orcid.org/oauth/authorize"
 ORCID_TOKEN_URL   = "https://orcid.org/oauth/token"
@@ -32,7 +69,8 @@ DEPLOY_DIR        = Path(os.environ.get("DEPLOY_DIR", "/home/debian/qlever-sparq
 RUDOF_BIN         = os.environ.get("RUDOF_BIN", "/usr/bin/rudof")
 JENA_BIN          = os.environ.get("JENA_BIN", "/home/debian/apache-jena-6.0.0/bin")
 SHEXER_VENV       = os.environ.get("SHEXER_VENV", "/home/debian/koetai-admin/venv/bin/python3")
-DB_PATH           = Path(__file__).parent / "db" / "koetai.db"
+DB_PATH           = Path(os.environ.get("KOETAI_DB_PATH",
+                                        Path(__file__).parent / "db" / "koetai.db"))
 GITHUB_TOKEN      = os.environ.get("GITHUB_TOKEN", "")
 GITLAB_TOKEN      = os.environ.get("GITLAB_TOKEN", "")
 GITHUB_ORG        = os.environ.get("GITHUB_ORG", "Koetai")

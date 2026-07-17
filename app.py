@@ -40,6 +40,23 @@ def load_user(user_id):
     row = db.execute("SELECT * FROM users WHERE id = ?", (int(user_id),)).fetchone()
     return User.from_row(row) if row else None
 
+if config.IS_LOCAL:
+    from flask_login import login_user, current_user
+    from services.db import get_local_user_row
+
+    @app.before_request
+    def _sign_in_local_user():
+        """A local install has exactly one user and no sign-in step.
+
+        Doing this here rather than stubbing login_required means every
+        @login_required route and every current_user reference keeps working
+        untouched, and community mode is completely unaffected.
+        """
+        if not current_user.is_authenticated:
+            row = get_local_user_row()
+            if row:
+                login_user(User.from_row(row))
+
 # ── Blueprints ────────────────────────────────────────────────────────────────
 from routes.auth      import bp as auth_bp
 from routes.dashboard import bp as dashboard_bp

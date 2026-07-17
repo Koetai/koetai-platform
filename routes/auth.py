@@ -21,6 +21,10 @@ def _orcid_session(state=None):
 
 @bp.route("/login")
 def login():
+    # A local install is already signed in as its single user (see app.py), and
+    # has no ORCID credentials to redirect with.
+    if config.IS_LOCAL:
+        return redirect(url_for("dashboard.index"))
     oauth = _orcid_session()
     auth_url, state = oauth.authorization_url(config.ORCID_AUTH_URL)
     session["oauth_state"] = state
@@ -29,6 +33,8 @@ def login():
 
 @bp.route("/callback")
 def callback():
+    if config.IS_LOCAL:
+        return redirect(url_for("dashboard.index"))
     state = session.get("oauth_state")
     oauth = _orcid_session(state=state)
 
@@ -85,6 +91,11 @@ def callback():
 @bp.route("/logout")
 @login_required
 def logout():
+    # Signing out of a local install is meaningless — the next request would sign
+    # the same user straight back in — so say so rather than appear to no-op.
+    if config.IS_LOCAL:
+        flash("This is a local install; there is no account to sign out of.", "info")
+        return redirect(url_for("index"))
     logout_user()
     return redirect(url_for("index"))
 
@@ -92,6 +103,9 @@ def logout():
 @bp.route("/invite/<code>")
 def accept_invite(code):
     """Store invite code in session then redirect to ORCID login."""
+    if config.IS_LOCAL:
+        flash("Invitations only apply to the hosted community platform.", "info")
+        return redirect(url_for("index"))
     db = get_db()
     invite = db.execute(
         "SELECT * FROM invitations WHERE code = ? AND used_by IS NULL", (code,)
