@@ -5,6 +5,7 @@ import shutil
 from pathlib import Path
 import requests
 import config
+from services.sparql_http import scoped_body
 
 
 def sparql_update(query: str, endpoint_url: str = None) -> tuple[bool, str]:
@@ -17,11 +18,16 @@ def sparql_update(query: str, endpoint_url: str = None) -> tuple[bool, str]:
         return False, str(e)
 
 
-def sparql_query(query: str, endpoint_url: str = None) -> tuple[bool, dict]:
-    """Run a SPARQL SELECT/CONSTRUCT against the platform QLever instance."""
+def sparql_query(query: str, endpoint_url: str = None, graphs=None) -> tuple[bool, dict]:
+    """Run a SPARQL SELECT/CONSTRUCT against the platform QLever instance.
+
+    `graphs` (a sparql_http.Scope) confines the query server-side. This matters
+    more on QLever than elsewhere: its default graph is the union of every named
+    graph, so an unscoped `?s ?p ?o` would read all tenants' data.
+    """
     url = (endpoint_url or config.QLEVER_PLATFORM_URL)
     try:
-        r = requests.post(url, data={"query": query},
+        r = requests.post(url, data=scoped_body(query, graphs),
                           headers={"Accept": "application/sparql-results+json"}, timeout=120)
         if r.status_code < 400:
             return True, r.json()

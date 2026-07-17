@@ -13,8 +13,19 @@ ORCID_AUTH_URL    = "https://orcid.org/oauth/authorize"
 ORCID_TOKEN_URL   = "https://orcid.org/oauth/token"
 ORCID_API_URL     = "https://pub.orcid.org/v3.0"
 
+# Triplestore backends. A dataset's `platform` column selects one of these;
+# services/triplestore.py resolves the name to a client. Only the stores you
+# actually run need to be configured — the rest simply report as unavailable.
 QLEVER_PLATFORM_URL  = os.environ.get("QLEVER_PLATFORM_URL", "http://localhost:7030")
 FUSEKI_BASE_URL      = os.environ.get("FUSEKI_BASE_URL", "http://localhost:3030")
+FUSEKI_DATASET       = os.environ.get("FUSEKI_DATASET", "koetai")
+VIRTUOSO_URL         = os.environ.get("VIRTUOSO_URL", "http://localhost:8890")
+VIRTUOSO_USER        = os.environ.get("VIRTUOSO_USER", "")
+VIRTUOSO_PASSWORD    = os.environ.get("VIRTUOSO_PASSWORD", "")
+OXIGRAPH_URL         = os.environ.get("OXIGRAPH_URL", "http://localhost:7878")
+BLAZEGRAPH_URL       = os.environ.get("BLAZEGRAPH_URL", "http://localhost:9999/bigdata")
+RDF4J_URL            = os.environ.get("RDF4J_URL", "http://localhost:8080/rdf4j-server")
+RDF4J_REPO           = os.environ.get("RDF4J_REPO", "koetai")
 BASE_URL          = os.environ.get("BASE_URL", "https://koetai.semscape.org")
 UPLOAD_DIR        = Path(os.environ.get("UPLOAD_DIR", "/home/debian/koetai-platform/uploads"))
 DEPLOY_DIR        = Path(os.environ.get("DEPLOY_DIR", "/home/debian/qlever-sparql-deployment"))

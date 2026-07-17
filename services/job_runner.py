@@ -161,10 +161,12 @@ def _process(job: dict):
 
         ts = triplestore.get(dict(ds_row))
 
+        # replace_graph is a single atomic PUT on backends with a Graph Store
+        # Protocol; on QLever it degrades to drop-then-load, as before.
         if replace:
-            ts.drop_graph(graph_uri)
-
-        ok, msg = ts.load_rdf_file(graph_uri, load_path)
+            ok, msg = ts.replace_graph(graph_uri, load_path)
+        else:
+            ok, msg = ts.load_rdf_file(graph_uri, load_path)
 
         # Clean up temp file if different from original
         if load_path != file_path:
