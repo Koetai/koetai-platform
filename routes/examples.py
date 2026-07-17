@@ -5,7 +5,7 @@ from flask import (Blueprint, render_template, request, jsonify,
 from flask_login import login_required, current_user
 import config
 from services.db import get_db
-from services import qlever
+from services import triplestore
 
 bp = Blueprint("examples", __name__, url_prefix="/u")
 
@@ -93,7 +93,8 @@ def run_example(owner_orcid, slug, ex_slug):
     if not ex:
         return jsonify({"error": "Example not found"}), 404
 
-    ok, result = qlever.sparql_query(ex["query"])
+    ok, result = triplestore.get(ds).sparql_query(
+        ex["query"], graphs=triplestore.dataset_scope(ds))
     if not ok:
         return jsonify(result), 500
     return jsonify(result)
@@ -116,7 +117,8 @@ def delete_example(owner_orcid, slug, ex_slug):
 
 
 def _store_example_rdf(ds, ex_slug, label, description, query, keywords_json):
-    """Store example as RDF (schema:target / sib sparql-examples format) in QLever."""
+    """Store example as RDF (schema:target / sib sparql-examples format) in the
+    dataset's own triplestore."""
     ex_uri      = f"{ds['graph_base']}/examples/{ex_slug}"
     endpoint_uri = f"{config.BASE_URL}/u/{ds['orcid_id']}/{ds['slug']}/sparql"
     keywords_list = json.loads(keywords_json)
@@ -144,4 +146,4 @@ INSERT DATA {{
     {ttl}
   }}
 }}"""
-    qlever.sparql_update(update)
+    return triplestore.get(ds).sparql_update(update)

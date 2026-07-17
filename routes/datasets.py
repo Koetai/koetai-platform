@@ -250,28 +250,28 @@ def upload_status(owner_orcid, slug, job_id):
 
 @bp.route("/<owner_orcid>/<slug>/sparql", methods=["GET", "POST"])
 def sparql_endpoint(owner_orcid, slug):
-    """Proxy SPARQL requests, scoped to this dataset's named graph."""
+    """Proxy SPARQL requests, confined to this dataset's own named graphs."""
     ds = _get_dataset_or_404(owner_orcid, slug)
     if not ds:
         return jsonify({"error": "Dataset not found"}), 404
 
-    # GET → always render the editor (query param pre-fills it)
+    # Private datasets are owner-only — for the editor as well as the query,
+    # since the editor page itself discloses the dataset's metadata.
+    if not ds["is_public"] and (not current_user.is_authenticated
+                                or current_user.id != ds["user_id"]):
+        return jsonify({"error": "This dataset is private"}), 403
+
+    # GET → render the editor (query param pre-fills it)
     if request.method == "GET":
         preload_query = request.args.get("query", "")
         return render_template("yasgui.html", ds=ds, preload_query=preload_query)
 
-    # POST → execute SPARQL
     query = request.form.get("query", "")
     if not query:
         return jsonify({"error": "No query provided"}), 400
 
-    # Scope query to dataset's named graph if no FROM clause present
-    graph_uri = ds["graph_base"] + "/data"
-    if "FROM" not in query.upper():
-        query = f"# Auto-scoped to dataset graph\n{query}"
-
     ts = triplestore.get(ds)
-    ok, result = ts.sparql_query(query)
+    ok, result = ts.sparql_query(query, graphs=triplestore.dataset_scope(ds))
     if not ok:
         return jsonify(result), 500
 
@@ -287,7 +287,7 @@ def delete(owner_orcid, slug):
         return redirect(url_for("dashboard.index"))
 
     ts = triplestore.get(ds)
-    for suffix in ["/data", "/examples", "/shapes"]:
+    for suffix in triplestore.GRAPH_SUFFIXES:
         ts.drop_graph(ds["graph_base"] + suffix)
 
     db = get_db()

@@ -4,7 +4,7 @@ import re
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash
 from flask_login import login_required, current_user
 from services.db import get_db
-from services import qlever
+from services import triplestore
 
 bp = Blueprint("sparqlist", __name__, url_prefix="/u")
 
@@ -110,7 +110,8 @@ def api_call(owner_orcid, slug, q_slug):
 
     query = _render_template_query(q["template"], params)
 
-    ok, result = qlever.sparql_query(query)
+    ok, result = triplestore.get(ds).sparql_query(
+        query, graphs=triplestore.dataset_scope(ds))
     if not ok:
         return jsonify(result), 500
 
