@@ -10,6 +10,34 @@ Two vhosts, one Caddy:
 | **koetai.semscape.org** | the platform (this repo) | Flask on :3002 |
 | **sparql.semscape.org** | the static SPARQL explorer + FDP/admin pages | files in `frontend/`, proxied services |
 
+## How this host is deployed
+
+The platform itself runs as a systemd service, not from `docker compose` (that
+compose file is for *local* single-user installs — see the repo root README).
+The production layout:
+
+1. **App** — `koetai-platform.service` runs `venv/bin/python3 app.py` on :3002
+   from a checkout of this repo, with real settings in `.env` (ORCID,
+   `KOETAI_MODE=community`, backend URLs). `.env.example` lists every variable.
+2. **Triplestore** — `qlever-platform.service` runs `qlever-server` on :7030
+   (Qleverfile in `qlever-sparql-deployment/platform/`, `PERSIST_UPDATES = true`
+   so uploads survive restarts). Fuseki on :3030 holds the larger datasets.
+3. **Static site** — the `frontend/` files are served by Caddy from
+   `/var/www/koetai/`.
+4. **Caddy** — `/etc/caddy/Caddyfile` is this directory's `Caddyfile` with a real
+   `ADMIN_PASSWORD_HASH` in the environment.
+
+Updating the live host from this repo, until a deploy script exists:
+
+```bash
+git pull
+sudo cp deploy/Caddyfile   /etc/caddy/Caddyfile     # then set ADMIN_PASSWORD_HASH
+sudo cp deploy/frontend/*  /var/www/koetai/
+caddy validate --config /etc/caddy/Caddyfile        # always, before reloading
+sudo systemctl reload caddy
+sudo systemctl restart koetai-platform              # only if app code changed
+```
+
 ## Caddyfile
 
 `Caddyfile` is the live config with one edit: the admin basic-auth hash is
@@ -28,8 +56,9 @@ What it encodes, post-consolidation:
 - `endpoint1` (olympics), `endpoint-fdp`, `endpoint-wikipathways` — **retired**.
   Olympics was QLever's demo dataset; the FDP moved into the platform; the
   WikiPathways download had silently failed and only ever held VoID metadata.
-- `/admin-api/*` + `/admin.html` → koetai-admin on :3001, behind basic auth.
-  koetai-admin is inert now (it manages no live instances) and is on its way out.
+- `/admin-api/*` + `/admin.html` — **retired**. These proxied koetai-admin on
+  :3001, which managed the standalone QLever instances. With those gone,
+  koetai-admin was shut down and its routes (and the admin.html page) removed.
 
 ## frontend/
 

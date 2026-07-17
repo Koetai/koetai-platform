@@ -39,20 +39,10 @@ sparql.semscape.org {
     redir /fdp/dist-ordo-sparql https://koetai.semscape.org/fdp/distribution/0000-0001-9773-4008/ordo-orphanet/sparql 301
     redir /fdp/dist-ahri-sparql https://koetai.semscape.org/fdp/distribution/0000-0003-2328-5208/ahri/sparql 301
 
-    handle_path /admin-api/* {
-        request_body {
-            max_size 500MB
-        }
-        basic_auth {
-            koetai {env.ADMIN_PASSWORD_HASH}
-        }
-        reverse_proxy 127.0.0.1:3001
-    }
+    # Retired: /admin-api and /admin.html proxied koetai-admin on :3001,
+    # which managed the standalone QLever instances. Those are gone (migrated
+    # or retired), so koetai-admin was shut down and its routes removed.
 
-    @admin path /admin.html
-    basic_auth @admin {
-        koetai {env.ADMIN_PASSWORD_HASH}
-    }
 }
 
 # Koetai Platform (FAIR SPARQL SaaS)
