@@ -7,16 +7,23 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent / ".env")
 
 # ── Mode ──────────────────────────────────────────────────────────────────────
-# community: the hosted, multi-tenant site — ORCID sign-in, invitation-gated.
-# local:     a single-user install on your own machine — no accounts, no ORCID.
-# The two run the same code; local simply skips the parts that only make sense
-# when strangers share an instance.
+# All three run the same code and differ only in who may sign in:
+#   community — the hosted public site. ORCID sign-in, registration invite-gated.
+#   internal  — a group hosts it for its own members. ORCID sign-in, registration
+#               gated by an allowlist (ORCID iDs and/or email domains) the host
+#               controls, so members join without a per-person invite.
+#   local     — a single-user install on your own machine. No accounts, no ORCID.
 KOETAI_MODE = os.environ.get("KOETAI_MODE", "community").strip().lower()
-if KOETAI_MODE not in ("community", "local"):
+if KOETAI_MODE not in ("community", "internal", "local"):
     raise RuntimeError(
-        f"KOETAI_MODE must be 'community' or 'local', not {KOETAI_MODE!r}"
+        f"KOETAI_MODE must be 'community', 'internal', or 'local', not {KOETAI_MODE!r}"
     )
-IS_LOCAL = KOETAI_MODE == "local"
+IS_COMMUNITY = KOETAI_MODE == "community"
+IS_INTERNAL  = KOETAI_MODE == "internal"
+IS_LOCAL     = KOETAI_MODE == "local"
+
+# community and internal both sign in with ORCID; only local runs without it.
+NEEDS_ORCID = IS_COMMUNITY or IS_INTERNAL
 
 # The single user a local install acts as. Keeping an ORCID-shaped slot means the
 # /u/<owner>/<slug> URL space, graph URIs and FDP catalogs work unchanged.
@@ -24,18 +31,34 @@ LOCAL_ORCID = os.environ.get("LOCAL_ORCID", "local")
 LOCAL_USER_NAME = os.environ.get("LOCAL_USER_NAME", "Local User")
 
 
+def _csv_set(name: str, lower: bool = False) -> frozenset:
+    """Parse a comma-separated env var into a set of trimmed, non-empty values."""
+    raw = os.environ.get(name, "")
+    items = (p.strip() for p in raw.split(","))
+    return frozenset(p.lower() if lower else p for p in items if p)
+
+
+# internal-mode registration allowlist. A first-time ORCID may register only if
+# it is on INTERNAL_ALLOWED_ORCIDS, or its (public) ORCID email is under a domain
+# in INTERNAL_ALLOWED_DOMAINS. INTERNAL_ADMIN_ORCIDS are always allowed and get
+# admin rights — set your own ORCID there to bootstrap a fresh instance.
+INTERNAL_ALLOWED_ORCIDS  = _csv_set("INTERNAL_ALLOWED_ORCIDS")
+INTERNAL_ALLOWED_DOMAINS = _csv_set("INTERNAL_ALLOWED_DOMAINS", lower=True)
+INTERNAL_ADMIN_ORCIDS    = _csv_set("INTERNAL_ADMIN_ORCIDS")
+
+
 def _required(name: str, local_default: str = "") -> str:
-    """Config that community mode cannot run without, but local mode never uses.
+    """Config the ORCID modes cannot run without, but local mode never uses.
 
     Failing loudly here beats an ImportError-shaped KeyError at startup.
     """
     value = os.environ.get(name)
     if value:
         return value
-    if IS_LOCAL:
+    if not NEEDS_ORCID:
         return local_default
     raise RuntimeError(
-        f"{name} is required when KOETAI_MODE=community. "
+        f"{name} is required when KOETAI_MODE={KOETAI_MODE}. "
         f"Set it in .env, or use KOETAI_MODE=local for a single-user install."
     )
 

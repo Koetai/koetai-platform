@@ -53,20 +53,38 @@ Flask (Python)
 
 ---
 
-## Two modes
+## Three modes
 
-The same codebase runs as the hosted community platform or as a single-user
-install on your own machine. `KOETAI_MODE` picks which.
+The same codebase runs as the public hosted platform, as a self-hosted instance
+for a group, or as a single-user install. `KOETAI_MODE` picks which.
 
-| | `community` | `local` |
-|---|---|---|
-| Who it's for | the hosted site at koetai.semscape.org | one person, one machine |
-| Sign-in | ORCID OAuth, invitation-only | none — auto-signed-in as a single user |
-| Needs ORCID credentials | yes | no |
-| Owner in URLs | the user's ORCID iD | `local` (override with `LOCAL_ORCID`) |
+| | `community` | `internal` | `local` |
+|---|---|---|---|
+| Who it's for | the public site at koetai.semscape.org | a group hosting for its members | one person, one machine |
+| Sign-in | ORCID OAuth | ORCID OAuth | none — auto-signed-in |
+| Who may register | invitation-only | allowlist (ORCID / email domain) | n/a — single user |
+| Needs ORCID credentials | yes | yes | no |
+| Owner in URLs | the user's ORCID iD | the user's ORCID iD | `local` (override with `LOCAL_ORCID`) |
 
-`community` is the default. A local install needs no ORCID app and no
-invitation; the ORCID block in `.env` can stay blank.
+`community` is the default.
+
+**internal** lets an organisation run its own instance. Members sign in with
+ORCID and are admitted automatically if they match the allowlist — no
+per-person invites. The host controls membership with three settings:
+
+```bash
+KOETAI_MODE=internal
+INTERNAL_ADMIN_ORCIDS=0000-0000-0000-0000        # always allowed, and made admin
+INTERNAL_ALLOWED_ORCIDS=0000-0001-1111-1111,...  # specific people
+INTERNAL_ALLOWED_DOMAINS=your-institute.org      # anyone with a public ORCID email here
+```
+
+Put your own ORCID in `INTERNAL_ADMIN_ORCIDS` to bootstrap a fresh instance.
+Domain matching is best-effort — it only works when a user has made an email
+public on ORCID — so the ORCID allowlist is the reliable path.
+
+**local** needs no ORCID app and no invitation; the ORCID block in `.env` can
+stay blank.
 
 ```bash
 KOETAI_MODE=local BASE_URL=http://localhost:3002 python3 app.py
@@ -125,11 +143,11 @@ Key `.env` variables:
 
 | Variable | Description |
 |---|---|
-| `KOETAI_MODE` | `community` (default) or `local` — see [Two modes](#two-modes) |
+| `KOETAI_MODE` | `community` (default), `internal`, or `local` — see [Three modes](#three-modes) |
 | `SECRET_KEY` | Flask session secret. Auto-generated per boot in `local` |
-| `ORCID_CLIENT_ID` | ORCID developer app client ID — *community only* |
-| `ORCID_CLIENT_SECRET` | ORCID developer app client secret — *community only* |
-| `ORCID_REDIRECT_URI` | e.g. `https://yourdomain.org/auth/callback` — *community only* |
+| `ORCID_CLIENT_ID` | ORCID developer app client ID — *community + internal* |
+| `ORCID_CLIENT_SECRET` | ORCID developer app client secret — *community + internal* |
+| `ORCID_REDIRECT_URI` | e.g. `https://yourdomain.org/auth/callback` — *community + internal* |
 | `BASE_URL` | Public base URL |
 | `QLEVER_PLATFORM_URL` | QLever instance URL (default `http://localhost:7030`) |
 | `DEPLOY_DIR` | Path to qlever-sparql-deployment directory |
@@ -141,11 +159,15 @@ Key `.env` variables:
 
 ```bash
 flask --app app run
-# or with gunicorn:
-gunicorn -w 2 -b 127.0.0.1:5000 app:app
+# or with gunicorn — one worker, many threads (see below):
+gunicorn --workers 1 --threads 8 -b 127.0.0.1:3002 app:app
 ```
 
-The included `koetai-platform.service` systemd unit can be used for production deployment.
+Use a **single** gunicorn worker. `services/job_runner.py` runs a per-process
+background thread that polls the upload-jobs table; a second worker would start a
+second runner and the two would race to claim the same job. Scale with `--threads`,
+not `--workers`. The included `koetai-platform.service` systemd unit and the
+`Dockerfile` both run one worker.
 
 ### Database
 
