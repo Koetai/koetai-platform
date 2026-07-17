@@ -1,5 +1,6 @@
 import os
 import secrets
+import sys
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -72,7 +73,12 @@ UPLOAD_DIR        = Path(os.environ.get("UPLOAD_DIR", "/home/debian/koetai-platf
 DEPLOY_DIR        = Path(os.environ.get("DEPLOY_DIR", "/home/debian/qlever-sparql-deployment"))
 RUDOF_BIN         = os.environ.get("RUDOF_BIN", "/usr/bin/rudof")
 JENA_BIN          = os.environ.get("JENA_BIN", "/home/debian/apache-jena-6.0.0/bin")
-SHEXER_VENV       = os.environ.get("SHEXER_VENV", "/home/debian/koetai-admin/venv/bin/python3")
+# Interpreter used for the shape-inference and OWL-reasoning subprocesses. These
+# run out-of-process because they are slow and memory-hungry, not because they
+# need a different environment: shexer/owlrl/lightrdf are in requirements.txt, so
+# the running interpreter can serve. It used to default into koetai-admin's venv,
+# which made this project silently depend on a sibling checkout.
+SHEXER_VENV       = os.environ.get("SHEXER_VENV", sys.executable)
 DB_PATH           = Path(os.environ.get("KOETAI_DB_PATH",
                                         Path(__file__).parent / "db" / "koetai.db"))
 GITHUB_TOKEN      = os.environ.get("GITHUB_TOKEN", "")

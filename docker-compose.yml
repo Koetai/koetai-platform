@@ -43,9 +43,6 @@ services:
       - VIRTUOSO_URL=http://virtuoso:8890
       - VIRTUOSO_USER=${VIRTUOSO_USER:-dba}
       - VIRTUOSO_PASSWORD=${VIRTUOSO_PASSWORD:-dba}
-      # One interpreter runs everything in this image, so the shape-inference
-      # and OWL-reasoning subprocesses just re-use it.
-      - SHEXER_VENV=/usr/local/bin/python3
     volumes:
       - koetai-data:/data
     networks:
