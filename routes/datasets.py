@@ -261,12 +261,20 @@ def sparql_endpoint(owner_orcid, slug):
                                 or current_user.id != ds["user_id"]):
         return jsonify({"error": "This dataset is private"}), 403
 
-    # GET → render the editor (query param pre-fills it)
+    # A GET with ?query= is a SPARQL request under the SPARQL 1.1 Protocol, but
+    # it is also how the editor is opened with a query pre-filled. Tell them
+    # apart by what the caller asks for: a browser says text/html, a SPARQL
+    # client does not. Without this, every GET client (and anything redirected
+    # here from the old QLever endpoints) receives the editor page instead of
+    # results.
     if request.method == "GET":
-        preload_query = request.args.get("query", "")
-        return render_template("yasgui.html", ds=ds, preload_query=preload_query)
+        query = request.args.get("query", "")
+        wants_html = "text/html" in request.headers.get("Accept", "")
+        if not query or wants_html:
+            return render_template("yasgui.html", ds=ds, preload_query=query)
+    else:
+        query = request.form.get("query", "")
 
-    query = request.form.get("query", "")
     if not query:
         return jsonify({"error": "No query provided"}), 400
 
