@@ -105,6 +105,18 @@ Protocol, so supporting another compliant store is a few lines in
 > server is started with `--persist-updates` (Qleverfile: `PERSIST_UPDATES = true`).
 > Without it, uploaded data is silently lost when the engine stops.
 
+> **Oxigraph and named graphs (0.5.x only)**: Oxigraph 0.5.x honours only the
+> *last* `named-graph-uri` parameter of a SPARQL request and silently ignores
+> the rest, so a dataset's `/examples` and `/shapes` graphs are not reliably
+> reachable via `GRAPH`. Its `/data` graph reads normally as the default graph,
+> which is the common path. This fails *closed* — the scope narrows, never
+> widens — so dataset isolation is unaffected. Fixed upstream in `main` (0.6)
+> but not backported to 0.5.x, and `ghcr.io/oxigraph/oxigraph:latest` is still
+> 0.5.10; see [oxigraph#1862](https://github.com/oxigraph/oxigraph/issues/1862)
+> and [oxigraph#1835](https://github.com/oxigraph/oxigraph/issues/1835). Prefer
+> Fuseki for datasets where SPARQL examples or inferred shapes matter, until
+> 0.6 ships.
+
 ### Federation datasets (Comunica)
 
 A dataset with `platform='comunica'` is **virtual**: it stores no data of its own
