@@ -31,13 +31,7 @@ DEFAULT_BACKEND = "qlever"
 # The graphs a dataset owns. `/data` is the default graph so a plain
 # `?s ?p ?o` reads the user's triples; the rest are reachable only via an
 # explicit GRAPH, and nothing outside this list is reachable at all.
-#
-# `/data` is deliberately last. Order is meaningless to a compliant store, but
-# Oxigraph 0.5.x honours only the final `named-graph-uri` it is sent and drops
-# the others, so whichever graph sits last is the only one its `GRAPH` clauses
-# can reach. Putting `/data` there spends that single slot on the graph holding
-# the user's triples rather than on `/shapes`. See the README note.
-GRAPH_SUFFIXES = ("/examples", "/shapes", "/data")
+GRAPH_SUFFIXES = ("/data", "/examples", "/shapes")
 
 
 def dataset_scope(ds):
