@@ -176,10 +176,18 @@ def costs():
     if upload_dir.exists():
         uploads_gb = round(sum(f.stat().st_size for f in upload_dir.rglob("*") if f.is_file()) / 1e9, 2)
 
+    # Shown relative to $HOME where it lives there (the systemd host), absolute
+    # otherwise: a container puts uploads on a volume outside home (/data/uploads
+    # against a $HOME of /root), and relative_to() raises rather than falling back.
+    try:
+        upload_display = str(upload_dir.relative_to(Path.home()))
+    except ValueError:
+        upload_display = str(upload_dir)
+
     disk_items = [
         {"path": "fuseki-data/databases/koetai/", "size": "~15 GB",
          "note": "Fuseki triple store — compact via Fuseki admin UI if needed"},
-        {"path": str(upload_dir.relative_to(Path.home())), "size": f"{uploads_gb} GB",
+        {"path": upload_display, "size": f"{uploads_gb} GB",
          "note": "Source files kept after import — safe to delete once loaded into the triplestore"},
         {"path": "~/all_ome_2025_09_23.nt", "size": "138 MB",
          "note": "Loose raw data file — delete if already loaded"},
