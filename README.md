@@ -107,10 +107,11 @@ Protocol, so supporting another compliant store is a few lines in
 
 > **Oxigraph and named graphs (0.5.x only)**: Oxigraph 0.5.x honours only the
 > *last* `named-graph-uri` parameter of a SPARQL request and silently ignores
-> the rest, so a dataset's `/examples` and `/shapes` graphs are not reliably
-> reachable via `GRAPH`. Its `/data` graph reads normally as the default graph,
-> which is the common path. This fails *closed* — the scope narrows, never
-> widens — so dataset isolation is unaffected. Fixed upstream in `main` (0.6)
+> the rest, so only one of a dataset's graphs is reachable through `GRAPH`.
+> `GRAPH_SUFFIXES` puts `/data` last so that it is the one, leaving `/examples`
+> and `/shapes` unreachable that way; `/data` also reads normally as the default
+> graph. This fails *closed* — the scope narrows, never widens — so dataset
+> isolation is unaffected. Fixed upstream in `main` (0.6)
 > but not backported to 0.5.x, and `ghcr.io/oxigraph/oxigraph:latest` is still
 > 0.5.10; see [oxigraph#1862](https://github.com/oxigraph/oxigraph/issues/1862)
 > and [oxigraph#1835](https://github.com/oxigraph/oxigraph/issues/1835). Prefer
