@@ -78,16 +78,6 @@ app.register_blueprint(github_bp)
 app.register_blueprint(web_sources_bp)
 app.register_blueprint(fdp_bp)
 
-# ── Template context: monthly cost indicator ─────────────────────────────────
-@app.context_processor
-def inject_monthly_cost():
-    from routes.dashboard import _load_costs, _compute_total
-    try:
-        cfg = _load_costs()
-        return {"monthly_cost_eur": _compute_total(cfg)}
-    except Exception:
-        return {"monthly_cost_eur": None}
-
 # ── Main routes ───────────────────────────────────────────────────────────────
 @app.route("/")
 def index():
