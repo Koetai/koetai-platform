@@ -31,6 +31,11 @@ services:
       - BASE_URL=${BASE_URL:-http://localhost:3002}
       - KOETAI_DB_PATH=/data/koetai.db
       - UPLOAD_DIR=/data/uploads
+      # A local install is uploading from the same machine, so the transfer is
+      # not the slow part and the 500 MB default is just in the way. Raised well
+      # past the size of a compressed dump; a file bigger than this is better
+      # fetched by the Web tab, which is not capped at all.
+      - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-4096}
       # Container service names, not localhost.
       - FUSEKI_BASE_URL=http://fuseki:3030
       - FUSEKI_DATASET=${FUSEKI_DATASET:-koetai}
