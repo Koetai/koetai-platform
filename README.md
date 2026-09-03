@@ -112,8 +112,10 @@ Protocol client differing only in URL layout and auth — but nobody has run
 Koetai against them. Treat them as a starting point, not a promise. Adding
 another compliant store is a few lines in the same registry.
 
-The **New Dataset** form currently offers QLever, Fuseki, Oxigraph and Comunica.
-The other three are accepted by the backend but cannot yet be picked in the UI.
+The **New Dataset** form lists every backend above, ordered with the reachable
+ones first and one of those preselected. A store that is not running is shown
+but cannot be chosen, and the untested ones are labelled as such, so the form
+reflects what the install actually has rather than a fixed list.
 
 Configure only the stores you actually run; the rest report as unavailable. See
 `.env.example`.

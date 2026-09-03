@@ -36,30 +36,30 @@
       <div class="mb-3">
         <label class="form-label fw-semibold">Triplestore Platform</label>
         <div class="mt-1">
+          {# Driven by triplestore.backend_choices(), so this lists what the
+             install actually has rather than a hardcoded three. Reachable
+             backends come first and one of them is preselected. #}
+          {% for b in backends %}
           <div class="form-check mb-1">
-            <input class="form-check-input" type="radio" name="platform" id="platformQlever" value="qlever" checked>
-            <label class="form-check-label" for="platformQlever">
-              <strong>QLever</strong> <span class="text-muted small">— optimised for very large read-mostly datasets</span>
+            <input class="form-check-input" type="radio" name="platform"
+                   id="platform-{{ b.name }}" value="{{ b.name }}"
+                   {% if not b.available %}disabled{% endif %}
+                   {% if loop.first and b.available %}checked{% endif %}>
+            <label class="form-check-label{% if not b.available %} text-muted{% endif %}"
+                   for="platform-{{ b.name }}">
+              <strong>{{ b.label }}</strong>
+              {% if not b.available %}<span class="badge bg-secondary ms-1">not running</span>{% endif %}
+              {% if not b.tested %}<span class="badge bg-warning text-dark ms-1">untested</span>{% endif %}
+              <span class="text-muted small d-block">{{ b.description }}</span>
             </label>
           </div>
-          <div class="form-check mb-1">
-            <input class="form-check-input" type="radio" name="platform" id="platformFuseki" value="fuseki">
-            <label class="form-check-label" for="platformFuseki">
-              <strong>Fuseki / Jena</strong> <span class="text-muted small">— updateable, native ShEx support, OWL reasoning</span>
-            </label>
+          {% endfor %}
+          {% if not backends|selectattr('available')|list %}
+          <div class="alert alert-warning mt-2 mb-0 small">
+            No triplestore is reachable, so a dataset cannot be created yet. Start one
+            (<code>docker compose up -d</code> starts Fuseki) and reload this page.
           </div>
-          <div class="form-check mb-1">
-            <input class="form-check-input" type="radio" name="platform" id="platformOxigraph" value="oxigraph">
-            <label class="form-check-label" for="platformOxigraph">
-              <strong>Oxigraph</strong> <span class="text-muted small">— lightweight and durable; a good default for a small install</span>
-            </label>
-          </div>
-          <div class="form-check">
-            <input class="form-check-input" type="radio" name="platform" id="platformComunica" value="comunica">
-            <label class="form-check-label" for="platformComunica">
-              <strong>Federation (Comunica)</strong> <span class="text-muted small">— no upload; queries live across external sources</span>
-            </label>
-          </div>
+          {% endif %}
         </div>
       </div>
 
@@ -145,7 +145,7 @@ slugInput.addEventListener('input', () => {
 // Show the sources field only for a federation (Comunica) dataset.
 const sourcesBlock = document.getElementById('sourcesBlock');
 function syncPlatform() {
-  const isFed = document.getElementById('platformComunica').checked;
+  const isFed = (document.getElementById('platform-comunica') || {}).checked;
   sourcesBlock.classList.toggle('d-none', !isFed);
   sourcesBlock.querySelector('textarea').required = isFed;
 }

@@ -78,7 +78,8 @@ class QLeverStore:
         return qlever.count_triples(graph_uri)
 
     def is_available(self):
-        ok, _ = qlever.sparql_query("ASK { ?s ?p ?o }")
+        ok, _ = qlever.sparql_query("ASK { ?s ?p ?o }",
+                                    timeout=config.BACKEND_PROBE_TIMEOUT)
         return ok
 
 
@@ -184,6 +185,42 @@ def get_by_name(platform: str):
             f"Unknown triplestore backend {platform!r}. Supported: {', '.join(SUPPORTED)}"
         )
     return builder()
+
+
+# What each backend is, for the dataset form. Kept beside the registry so a new
+# backend is described where it is added rather than in a template that nobody
+# remembers to update — which is how the form came to offer three of seven.
+# `tested` marks the ones Koetai has actually been run against; the rest use the
+# same SPARQL 1.1 + Graph Store client and are configured the same way, but are
+# unproven, and saying so is more useful than listing them as equals.
+BACKEND_INFO = {
+    "fuseki":     ("Fuseki / Jena", "Apache Jena TDB2 — queryable as soon as an upload finishes. The safe default.", True),
+    "oxigraph":   ("Oxigraph",      "Lighter than Fuseki and just as durable. Needs Oxigraph 0.5.11 or later.", True),
+    "qlever":     ("QLever",        "Very fast over large read-mostly data, but Koetai cannot upload to it — querying an existing index only.", True),
+    "comunica":   ("Federation (Comunica)", "Not a store: holds no data and queries a list of external sources live.", True),
+    "virtuoso":   ("Virtuoso",      "Implemented but never tested against Koetai.", False),
+    "blazegraph": ("Blazegraph",    "Implemented but never tested against Koetai.", False),
+    "rdf4j":      ("RDF4J",         "Implemented but never tested against Koetai.", False),
+}
+
+
+def backend_choices() -> list[dict]:
+    """The backends to offer on the dataset form, reachable ones first.
+
+    The form used to hardcode its options, so it offered QLever by default with
+    no QLever running, and had no entry at all for stores that were.
+    """
+    status = available()
+    choices = []
+    for name, (label, blurb, tested) in BACKEND_INFO.items():
+        choices.append({
+            "name": name, "label": label, "description": blurb,
+            "tested": tested, "available": status.get(name, False),
+        })
+    # Reachable first, then the ones that have been proven, then by definition
+    # order — so the top option is always something that will actually work.
+    choices.sort(key=lambda c: (not c["available"], not c["tested"]))
+    return choices
 
 
 def available() -> dict[str, bool]:
