@@ -215,7 +215,12 @@
     <div id="validate-result-{{ sh.id }}" class="mt-2"></div>
   </div>
   {% if sh.format == 'shex' and sh.source == 'inferred' %}
-  <script>renderShExStats({{ sh.id }}, {{ sh.content | tojson }});</script>
+  {# Deferred: this runs while the page is still parsing, and renderShExStats is
+     defined several hundred lines further down, so calling it directly threw
+     ReferenceError every time — which is why the Coverage tab was always empty. #}
+  <script>document.addEventListener('DOMContentLoaded', function () {
+    renderShExStats({{ sh.id }}, {{ sh.content | tojson }});
+  });</script>
   {% endif %}
 </div>
 {% endfor %}
@@ -253,24 +258,52 @@ function renderShExStats(shapeId, shex) {
   const el = document.getElementById('stats-' + shapeId);
   if (!el) return;
 
-  // Parse ShEx: find shape blocks and extract property + percentage
-  const shapeRe = /([:\w<][^\n{]*?)\s*\n?\s*\{([^}]*)\}/gs;
-  const propRe  = /([^\s;#]+)\s+([^\s;#\[]+(?:\s*\[[^\]]*\])?)[^;#]*(?:;\s*)?(?:#\s*([\d.]+)\s*%)?/g;
-
+  // ShExer puts each constraint's coverage in a comment on the FOLLOWING line,
+  // and those comments contain braces ("Cardinality: {1}"). Reading a shape body
+  // as "{ up to the next }" therefore stopped inside the first comment, so most
+  // properties never reached this list and the panel usually rendered nothing.
+  // Walk the text instead: keep the comments, since the percentages live in
+  // them, and count braces only outside them.
   const shapes = [];
-  let m;
-  while ((m = shapeRe.exec(shex)) !== null) {
-    const nameToken = m[1].trim();
-    if (/^PREFIX|^BASE/i.test(nameToken)) continue;
-    const name = nameToken.replace(/^.*[#/:]/, '').replace(/\W/g, '_') || nameToken;
-    const body = m[2];
+  let i = 0;
+  while (i < shex.length) {
+    const open = shex.indexOf('{', i);
+    if (open === -1) break;
+    const lineStart = shex.lastIndexOf('\n', open) + 1;
+    if (shex.slice(lineStart, open).includes('#')) { i = open + 1; continue; }
+
+    const head = shex.slice(i, open).trim().split('\n');
+    const nameToken = (head[head.length - 1] || '').trim();
+    let depth = 1, j = open + 1;
+    while (j < shex.length && depth) {
+      const ch = shex[j];
+      if (ch === '#') { const nl = shex.indexOf('\n', j); if (nl === -1) { j = shex.length; break; } j = nl; }
+      else if (ch === '{') depth++;
+      else if (ch === '}') depth--;
+      j++;
+    }
+    const body = shex.slice(open + 1, Math.max(open + 1, j - 1));
+    i = j;
+    if (!nameToken || /^PREFIX|^BASE/i.test(nameToken)) continue;
+    const name = nameToken.replace(/[<>]/g, '').replace(/^.*[#/:]/, '').replace(/\W/g, '_') || nameToken;
+
     const props = [];
-    let pm;
-    while ((pm = propRe.exec(body)) !== null) {
-      const prop = pm[1];
-      if (!prop || /rdf.type|rdf-syntax-ns#type/i.test(prop)) continue;
-      const pct = pm[3] ? parseFloat(pm[3]) : null;
-      const propName = prop.replace(/^.*[#/:]/, '') || prop;
+    const lines = body.split('\n');
+    for (let k = 0; k < lines.length; k++) {
+      const codePart = lines[k].split('#')[0].trim().replace(/;$/, '').trim();
+      if (!codePart) continue;
+      const predicate = codePart.split(/\s+/)[0];
+      if (!predicate || /rdf-syntax-ns#type/i.test(lines[k])) continue;
+      let pct = null;
+      const here = lines[k].match(/#\s*([\d.]+)\s*%/);
+      if (here) pct = parseFloat(here[1]);
+      else {
+        for (let n = k + 1; n < lines.length && lines[n].trim().startsWith('#'); n++) {
+          const m2 = lines[n].match(/([\d.]+)\s*%/);
+          if (m2) { pct = parseFloat(m2[1]); break; }
+        }
+      }
+      const propName = predicate.replace(/[<>]/g, '').replace(/^.*[#/:]/, '') || predicate;
       if (propName && pct !== null) props.push({ name: propName, pct });
     }
     if (props.length) shapes.push({ name, props });

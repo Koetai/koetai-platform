@@ -13,6 +13,9 @@ import os
 import re
 import sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import shex_parse
+
 from shexer.shaper import Shaper
 from shexer.consts import TURTLE, NT
 
@@ -55,11 +58,7 @@ def main():
 
 def _local(token: str) -> str:
     """Return a safe local name from a URI or prefixed name."""
-    token = token.strip().strip("<>")
-    for sep in ("#", "/"):
-        if sep in token:
-            token = token.rsplit(sep, 1)[-1]
-    return re.sub(r"\W+", "_", token).strip("_") or "Unknown"
+    return shex_parse.local_name(token) or "Unknown"
 
 
 def _write_rdfconfig_yaml(shex: str, out_dir: Path):
@@ -82,29 +81,18 @@ def _write_rdfconfig_yaml(shex: str, out_dir: Path):
     # Join back so we can do multi-line shape matching
     text = "\n".join(lines)
 
-    # Match: <URI> { ... } or prefix:local { ... }
-    shape_re = re.compile(
-        r'((?:<[^>]+>)|(?:[\w]+:[\w\-_]+)|(?::[\w\-_]+))\s*\{([^}]*)\}',
-        re.DOTALL
-    )
-
+    # Comments carry braces and URIs carry '#', so both have to be handled
+    # before anything is matched — see services/shex_parse.
     shapes: dict[str, list[dict]] = {}
 
-    for m in shape_re.finditer(text):
-        raw_name = m.group(1).strip()
-        body     = m.group(2)
-
-        # Skip PREFIX blocks accidentally matched
-        if raw_name.upper().startswith("PREFIX") or raw_name.upper().startswith("BASE"):
-            continue
-
+    for raw_name, body in shex_parse.shape_blocks(shex_parse.strip_comments(text)):
         shape_name = _local(raw_name)
         if not shape_name:
             continue
 
         props = []
         for prop_line in body.splitlines():
-            prop_line = re.sub(r'#.*$', '', prop_line).strip().rstrip(';').strip()
+            prop_line = prop_line.strip().rstrip(';').strip()
             if not prop_line:
                 continue
             parts = prop_line.split()

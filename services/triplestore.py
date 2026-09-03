@@ -195,15 +195,38 @@ def export_sample(ds, max_subjects: int = 5000, timeout: int = 300):
     import tempfile
 
     store = get(ds)
-    query = (
-        "SELECT ?s ?p ?o WHERE { "
-        f"{{ SELECT DISTINCT ?s WHERE {{ ?s ?p ?o }} LIMIT {int(max_subjects)} }} "
-        "?s ?p ?o }"
-    )
-    ok, result = store.sparql_query(query, graphs=dataset_scope(ds), timeout=timeout)
-    if not ok:
-        return None, 0
-    rows = result.get("results", {}).get("bindings", [])
+    scope = dataset_scope(ds)
+
+    # Sample per rdf:type, not off the top of the dataset. A flat LIMIT takes
+    # whatever subjects the store returns first — one contiguous run — so a type
+    # holding a small share of the data gets few representatives or none, and its
+    # optional properties disappear from the inferred shape entirely. Shapes are
+    # per type, so sampling per type is what the result is actually made of.
+    ok, types_result = store.sparql_query(
+        "SELECT DISTINCT ?t WHERE { ?s a ?t } LIMIT 64", graphs=scope, timeout=timeout)
+    types = ([b["t"]["value"] for b in types_result.get("results", {}).get("bindings", [])
+              if b.get("t", {}).get("type") == "uri"] if ok else [])
+
+    rows = []
+    if types:
+        per_type = max(50, int(max_subjects) // len(types))
+        for t in types:
+            ok, res = store.sparql_query(
+                "SELECT ?s ?p ?o WHERE { "
+                f"{{ SELECT ?s WHERE {{ ?s a <{t}> }} LIMIT {per_type} }} "
+                "?s ?p ?o }", graphs=scope, timeout=timeout)
+            if ok:
+                rows.extend(res.get("results", {}).get("bindings", []))
+
+    if not rows:
+        # Untyped data, or a store that could not answer the type query.
+        ok, result = store.sparql_query(
+            "SELECT ?s ?p ?o WHERE { "
+            f"{{ SELECT DISTINCT ?s WHERE {{ ?s ?p ?o }} LIMIT {int(max_subjects)} }} "
+            "?s ?p ?o }", graphs=scope, timeout=timeout)
+        if not ok:
+            return None, 0
+        rows = result.get("results", {}).get("bindings", [])
     if not rows:
         return None, 0
 
