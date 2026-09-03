@@ -166,6 +166,13 @@ app.teardown_appcontext(close_db)
 
 with app.app_context():
     init_db()
+    # A job still marked running belongs to a process that is gone; nothing
+    # would ever advance it. Do this before serving, so a stale row cannot be
+    # mistaken for work in progress.
+    from services import job_runner as _job_runner
+    _orphaned = _job_runner.reclaim_orphaned()
+    if _orphaned:
+        print(f"[koetai] marked {_orphaned} interrupted upload job(s) as failed")
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=3002, debug=False)
