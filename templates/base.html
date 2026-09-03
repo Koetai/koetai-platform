@@ -10,7 +10,12 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <style>
     :root { --koetai-blue: #1a4a8a; --koetai-teal: #0d8a7c; }
-    body   { background: #f8f9fa; }
+    /* Sticky footer: the page is a column at least as tall as the viewport, and
+       the content block is the part that grows. Without this the footer sits
+       directly under short content, half way up the window. The footer keeps
+       its mt-5, which still spaces it off long content. */
+    body   { background: #f8f9fa; min-height: 100vh; display: flex; flex-direction: column; }
+    .page-content { flex: 1 0 auto; }
     .navbar { background: var(--koetai-blue) !important; }
     .navbar-brand { font-weight: 700; letter-spacing:.04em; color:#fff !important; }
     .nav-link { color: rgba(255,255,255,.85) !important; }
@@ -100,7 +105,7 @@
   </div>
 </nav>
 
-<div class="container mt-4">
+<div class="container mt-4 page-content">
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% for cat, msg in messages %}
     <div class="alert alert-{{ 'danger' if cat == 'error' else cat }} alert-dismissible fade show">
