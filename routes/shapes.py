@@ -7,6 +7,7 @@ import io
 import config
 import tempfile, shutil
 from services.db import get_db
+from services import triplestore
 from services import shexer_service, rudof_service, jena_service, rdfconfig_service
 
 bp = Blueprint("shapes", __name__, url_prefix="/u")
@@ -65,6 +66,26 @@ def view(owner_orcid, slug):
     return render_template("shapes.html", ds=ds, shapes=shapes)
 
 
+def _rdf_source(ds, user_id, slug):
+    """RDF to infer shapes from, or validate against.
+
+    Prefers the uploaded file when it is still there, because it is the whole
+    thing. Otherwise takes a sample from the store, which is where the data
+    actually lives — the upload is a transient copy, and telling someone with
+    millions of triples loaded that they have "no RDF data" because a temporary
+    file was tidied away is simply wrong.
+
+    Returns (path, is_temp, note); path is None when there is really nothing.
+    """
+    f = _latest_rdf_file(user_id, slug)
+    if f:
+        return f, False, None
+    path, n = triplestore.export_sample(ds)
+    if not path:
+        return None, False, None
+    return path, True, f"Sampled {n:,} triples from the triplestore."
+
+
 @bp.route("/<owner_orcid>/<slug>/shapes/infer", methods=["POST"])
 @login_required
 def infer(owner_orcid, slug):
@@ -73,9 +94,9 @@ def infer(owner_orcid, slug):
         return jsonify({"error": "Not found or not authorized"}), 403
 
     tool     = request.json.get("tool", "shexer")  # shexer | rudof_shex | rudof_shacl
-    rdf_file = _latest_rdf_file(current_user.id, slug)
+    rdf_file, _sample, _note = _rdf_source(ds, current_user.id, slug)
     if not rdf_file:
-        return jsonify({"error": "No RDF data uploaded yet"}), 400
+        return jsonify({"error": "This dataset holds no triples yet — upload some data first."}), 400
 
     rdfcfg_model  = None
     rdfcfg_prefix = None
@@ -148,9 +169,9 @@ def validate(owner_orcid, slug):
         return jsonify({"error": "Not found or not authorized"}), 403
 
     shape_id = request.json.get("shape_id")
-    rdf_file = _latest_rdf_file(current_user.id, slug)
+    rdf_file, _sample, _note = _rdf_source(ds, current_user.id, slug)
     if not rdf_file:
-        return jsonify({"error": "No RDF data uploaded yet"}), 400
+        return jsonify({"error": "This dataset holds no triples yet — upload some data first."}), 400
 
     db = get_db()
     shape = db.execute("SELECT * FROM shapes WHERE id = ? AND dataset_id = ?",

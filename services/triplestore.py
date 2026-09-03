@@ -177,6 +177,62 @@ def get(ds_row):
     return get_by_name(platform or DEFAULT_BACKEND)
 
 
+def export_sample(ds, max_subjects: int = 5000, timeout: int = 300):
+    """Write a sample of a dataset's triples to a temporary N-Triples file.
+
+    Shape inference and validation read a file, which used to be the uploaded
+    source. That file is not guaranteed to exist — it is removed after loading
+    unless KEEP_UPLOADED_SOURCES says otherwise, an interrupted job clears it,
+    and a dataset filled from several uploads never had one file holding all of
+    it. The store is the thing that actually knows what the dataset contains.
+
+    Samples whole subjects rather than the first N triples: a bare LIMIT would
+    cut descriptions in half, and a shape inferred from half a description is
+    wrong in a way that is hard to see.
+
+    Returns (path, count) with path None when the dataset holds nothing.
+    """
+    import tempfile
+
+    store = get(ds)
+    query = (
+        "SELECT ?s ?p ?o WHERE { "
+        f"{{ SELECT DISTINCT ?s WHERE {{ ?s ?p ?o }} LIMIT {int(max_subjects)} }} "
+        "?s ?p ?o }"
+    )
+    ok, result = store.sparql_query(query, graphs=dataset_scope(ds), timeout=timeout)
+    if not ok:
+        return None, 0
+    rows = result.get("results", {}).get("bindings", [])
+    if not rows:
+        return None, 0
+
+    def term(t):
+        v = t.get("value", "")
+        kind = t.get("type")
+        if kind == "uri":
+            return f"<{v}>"
+        if kind == "bnode":
+            return f"_:{v}"
+        lit = '"' + v.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\r", "\\r") + '"'
+        if t.get("xml:lang"):
+            return f'{lit}@{t["xml:lang"]}'
+        if t.get("datatype"):
+            return f'{lit}^^<{t["datatype"]}>'
+        return lit
+
+    fd, name = tempfile.mkstemp(suffix=".nt", prefix="koetai-sample-")
+    written = 0
+    with open(fd, "w", encoding="utf-8") as f:
+        for b in rows:
+            try:
+                f.write(f"{term(b['s'])} {term(b['p'])} {term(b['o'])} .\n")
+                written += 1
+            except (KeyError, TypeError):
+                continue
+    return Path(name), written
+
+
 def get_by_name(platform: str):
     builder = _BUILDERS.get(platform)
     if builder is None:
