@@ -95,7 +95,9 @@ def index():
 
 @app.route("/help")
 def helppage():
-    return render_template("help.html")
+    # The upload limit is stated in the docs, so read it from config rather than
+    # letting a number in prose drift away from the one being enforced.
+    return render_template("help.html", max_upload_mb=config.MAX_UPLOAD_MB)
 
 @app.route("/mangal")
 def mangal():

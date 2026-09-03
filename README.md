@@ -1,6 +1,6 @@
 # Koetai — FAIR SPARQL Endpoint Platform
 
-**Koetai** is a multi-tenant SaaS platform for hosting FAIR SPARQL endpoints, built on [QLever](https://github.com/ad-freiburg/qlever). It lets researchers publish RDF datasets as queryable SPARQL endpoints with shapes, examples, REST APIs, and schema visualisations — all under a single hosted service.
+**Koetai** is a multi-tenant SaaS platform for hosting FAIR SPARQL endpoints. Each dataset picks its own triplestore — Fuseki and Oxigraph are the two that ship ready to run (see [Triplestores](#triplestores)). It lets researchers publish RDF datasets as queryable SPARQL endpoints with shapes, examples, REST APIs, and schema visualisations — all under a single hosted service.
 
 Live instance: **https://koetai.semscape.org**
 
@@ -20,7 +20,7 @@ This project is hosted on two forges. **Codeberg is the primary repository** —
 | Area | Details |
 |---|---|
 | **Authentication** | ORCID OAuth 2.0, invitation-only registration |
-| **Multi-tenancy** | QLever named graphs per user/dataset |
+| **Multi-tenancy** | A named graph per user/dataset, in whichever store backs it |
 | **RDF upload** | Turtle, N-Triples, RDF/XML, OWL/XML; async background indexing |
 | **OWL reasoning** | RDFS (Jena, fast) or OWL-RL (owlrl, async) |
 | **Shape inference** | [ShExer](https://github.com/DaniFdezAlvarez/shexer) for ShEx; [RUDOF](https://github.com/rudof-project/rudof) for ShEx/SHACL validation |
@@ -42,7 +42,7 @@ This project is hosted on two forges. **Codeberg is the primary repository** —
 Flask (Python)
 ├── ORCID OAuth 2.0        — flask-login + requests-oauthlib
 ├── SQLite                 — users, datasets, shapes, examples, jobs
-├── QLever SPARQL          — named graph per dataset, async background indexer
+├── Triplestore            — named graph per dataset, chosen per dataset (see below)
 ├── Apache Jena 6          — riot (RDF parsing/conversion), infer (RDFS reasoning)
 ├── owlrl (Python)         — OWL-RL materialisation (background job)
 ├── ShExer (Python)        — ShEx shape inference from uploaded data
@@ -92,14 +92,31 @@ KOETAI_MODE=local BASE_URL=http://localhost:3002 python3 app.py
 
 ## Triplestores
 
-A dataset's backend is chosen per dataset (`platform` column). Any of these
-open-source stores work:
+A dataset's backend is chosen per dataset, in its `platform` column. Every
+backend below is implemented in `services/triplestore.py`, but they are not all
+equally proven, so this table says plainly where each one stands:
 
-**qlever** · **fuseki** · **virtuoso** · **oxigraph** · **blazegraph** · **rdf4j**
+| `platform` | State | Notes |
+|---|---|---|
+| `fuseki` | **Tested, ships by default** | Apache Jena TDB2. Started by `docker compose up`. The safest choice. |
+| `oxigraph` | **Tested** | `docker compose --profile oxigraph up -d`. Smaller and lighter than Fuseki; needs 0.5.11 or later (see below). |
+| `qlever` | **Queries only** | Not started by compose — it serves an index built offline, so it needs its own setup. Uploading from Koetai does not work: the app sends no access token, which QLever requires for updates, and files over 50 MB take a rebuild path that assumes the app and QLever share a filesystem. |
+| `virtuoso` | *Implemented, untested* | Reached over the same SPARQL 1.1 + Graph Store Protocol client as Fuseki and Oxigraph, and configurable in `.env`, but not exercised. |
+| `blazegraph` | *Implemented, untested* | As above. Uses `context-uri` rather than `graph` for the Graph Store parameter. |
+| `rdf4j` | *Implemented, untested* | As above. |
+| `comunica` | *Implemented, needs Node* | Not a store at all — see [Federation datasets](#federation-datasets-comunica). Needs `@comunica/query-sparql` on `PATH`, which the Docker image does not include. |
 
-All but QLever are reached over SPARQL 1.1 Query/Update plus the Graph Store
-Protocol, so supporting another compliant store is a few lines in
-`services/triplestore.py`. Configure only the ones you run — see `.env.example`.
+"Implemented, untested" means the code path exists and is configured the same way
+as the tested ones — they are all instances of one SPARQL 1.1 + Graph Store
+Protocol client differing only in URL layout and auth — but nobody has run
+Koetai against them. Treat them as a starting point, not a promise. Adding
+another compliant store is a few lines in the same registry.
+
+The **New Dataset** form currently offers QLever, Fuseki, Oxigraph and Comunica.
+The other three are accepted by the backend but cannot yet be picked in the UI.
+
+Configure only the stores you actually run; the rest report as unavailable. See
+`.env.example`.
 
 > **QLever and durability**: QLever holds SPARQL UPDATEs in memory unless the
 > server is started with `--persist-updates` (Qleverfile: `PERSIST_UPDATES = true`).
@@ -131,10 +148,9 @@ against public knowledge graphs without copying them in.
 ### Prerequisites
 
 - Python 3.11+
-- A triplestore — [QLever](https://github.com/ad-freiburg/qlever),
-  [Fuseki](https://jena.apache.org/documentation/fuseki2/),
-  [Virtuoso](https://github.com/openlink/virtuoso-opensource),
-  [Oxigraph](https://github.com/oxigraph/oxigraph), Blazegraph or RDF4J
+- A triplestore — [Fuseki](https://jena.apache.org/documentation/fuseki2/) or
+  [Oxigraph](https://github.com/oxigraph/oxigraph) are the tested pair and both
+  ship in `docker-compose.yml`; see [Triplestores](#triplestores) for the rest
 - Caddy (for HTTPS / reverse proxy) — not needed for a local install
 
 Optional — only for the shapes, reasoning and diagram features:
@@ -220,7 +236,7 @@ koetai-platform/
 │   ├── github.py            # GitHub/GitLab SPARQL example sync
 │   └── web_sources.py       # Web source harvesting
 ├── services/
-│   ├── triplestore.py       # QLever / Fuseki abstraction
+│   ├── triplestore.py       # backend registry — resolves a dataset's platform
 │   ├── job_runner.py        # Async background upload job queue
 │   ├── owl_service.py       # RDFS/OWL reasoning via Jena + owlrl
 │   ├── shexer_service.py    # ShEx inference via ShExer

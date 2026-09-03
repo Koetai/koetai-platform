@@ -33,8 +33,9 @@
     <p>
       Koetai is a self-hosted FAIR SPARQL platform. Each registered user can create multiple
       <em>datasets</em>. Every dataset gets a dedicated named graph and a public SPARQL endpoint,
-      backed by either <strong>QLever</strong> (ultra-fast read-only index) or
-      <strong>Apache Jena Fuseki</strong> (updateable TDB2 store).
+      backed by a triplestore chosen per dataset — <strong>Fuseki</strong> and
+      <strong>Oxigraph</strong> are the two that ship ready to run
+      (see <a href="#datasets">Datasets &amp; triplestores</a>).
     </p>
     <p>
       RDF data can be loaded from local file uploads, GitHub/GitLab repositories, or arbitrary
@@ -66,25 +67,37 @@
       <li><strong>Label</strong> — human-readable name.</li>
       <li><strong>Platform</strong>:
         <ul>
-          <li><em>QLever</em> — blazing-fast for large read-only datasets. Data is indexed into an
-              inverted index; re-indexing is required after each bulk load.</li>
-          <li><em>Fuseki</em> — Apache Jena TDB2, immediately queryable after each upload. Better
-              for datasets that change frequently.</li>
+          <li><em>Fuseki</em> — Apache Jena TDB2. Queryable as soon as an upload finishes,
+                and the default: if you are unsure, choose this.</li>
+            <li><em>Oxigraph</em> — lighter than Fuseki and just as durable; a good choice for a
+                small install. Needs Oxigraph 0.5.11 or later.</li>
+            <li><em>QLever</em> — very fast over large read-mostly data, but it serves an index built
+                offline, so it must be set up separately and <strong>cannot currently be uploaded to
+                from Koetai</strong>. Usable for querying an existing QLever.</li>
+            <li><em>Federation (Comunica)</em> — not a store: the dataset holds no data of its own
+                and queries a list of external sources live.</li>
         </ul>
       </li>
     </ul>
-    <p>All triples are stored inside a named graph
+    <p class="small text-muted">Virtuoso, Blazegraph and RDF4J are also implemented and can be
+         configured, but have not been tested and cannot yet be picked in this form.</p>
+      <p>All triples are stored inside a named graph
        <code>https://koetai.semscape.org/u/{orcid}/{slug}/data</code>.</p>
 
     <!-- 4 -->
     <h4 id="upload" class="mt-4"><i class="bi bi-upload text-warning"></i> Uploading RDF data</h4>
-    <p>From the dataset page, use the <strong>Upload</strong> tab to load a local file (up to 500 MB).
-       Supported formats: <code>.ttl</code>, <code>.nt</code>, <code>.n3</code>, <code>.rdf</code>,
-       <code>.owl</code>, <code>.trig</code>, <code>.nq</code>, <code>.jsonld</code>.</p>
+    <p>From the dataset page, use the <strong>Upload</strong> tab to load a local file (up to
+         {{ max_upload_mb }} MB). Supported formats: <code>.ttl</code>, <code>.nt</code>,
+         <code>.n3</code>, <code>.rdf</code>, <code>.owl</code>, <code>.trig</code>,
+         <code>.nq</code>, <code>.jsonld</code>, and any of those compressed as <code>.gz</code>,
+         <code>.bz2</code>, <code>.zip</code> or <code>.tgz</code>. The limit is on the bytes
+         uploaded, so compressing a large graph is usually how it fits; for anything larger the
+         <strong>Web</strong> tab fetches from a URL and is not capped.</p>
     <p>For <code>.owl</code> and <code>.rdf</code> files an <em>Apply OWL reasoning</em> checkbox
        appears — see the <a href="#owl">OWL reasoning</a> section below.</p>
-    <p>After upload, QLever datasets are automatically re-indexed (this may take a few seconds to
-       minutes depending on file size). Fuseki datasets are immediately queryable.</p>
+    <p>Uploads are processed in the background: the page hands the file over and then follows
+         the job through its download, extraction and loading stages, so a large file does not
+         depend on the browser staying open. The dataset is queryable once the job reports done.</p>
 
     <!-- 5 -->
     <h4 id="git" class="mt-4"><i class="bi bi-git text-dark"></i> Git repository sources</h4>
@@ -201,8 +214,9 @@
 
     <div class="mt-5 mb-4 text-muted small">
       <hr>
-      Koetai is built on <a href="https://github.com/ad-freiburg/qlever" target="_blank">QLever</a>,
-      <a href="https://jena.apache.org/documentation/fuseki2/" target="_blank">Apache Jena Fuseki</a>,
+      Koetai builds on <a href="https://jena.apache.org/documentation/fuseki2/" target="_blank">Apache Jena Fuseki</a>,
+      <a href="https://oxigraph.org/" target="_blank">Oxigraph</a>,
+      <a href="https://github.com/ad-freiburg/qlever" target="_blank">QLever</a>,
       <a href="https://github.com/weso/shexer" target="_blank">ShExer</a>,
       <a href="https://github.com/rudof-project/rudof" target="_blank">rudof</a>,
       <a href="https://github.com/RDFLib/OWL-RL" target="_blank">owlrl</a>, and
