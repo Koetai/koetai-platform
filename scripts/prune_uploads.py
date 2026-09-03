@@ -6,10 +6,15 @@ deleted before that did not, and a failed upload used to leave its file behind
 with no job left to clean it. Those directories are unreferenced: nothing in the
 database points at them and no page lists them, so they simply accumulate.
 
-A directory is orphaned when <UPLOAD_DIR>/<user_id>/<slug> has no matching
-datasets row for that user and slug. Everything else is left alone — including
-the source files of live datasets, which are kept or not according to
-KEEP_UPLOADED_SOURCES.
+Two things are reported. A directory is *orphaned* when
+<UPLOAD_DIR>/<user_id>/<slug> has no matching datasets row for that user and
+slug. A file is *stale* when it is older than the dataset whose directory it
+sits in: a file is only ever written after its dataset exists, so one that
+predates it belongs to an earlier dataset that used the same slug and was
+deleted. Matching on slug alone would miss those entirely.
+
+Everything else is left alone — including the source files of live datasets,
+which are kept or not according to KEEP_UPLOADED_SOURCES.
 
     python3 scripts/prune_uploads.py            # report only
     python3 scripts/prune_uploads.py --delete   # actually remove them
@@ -54,6 +59,33 @@ def find_orphans(db_path: Path, upload_dir: Path) -> list[Path]:
     return orphans
 
 
+def find_stale(db_path: Path, upload_dir: Path) -> list[Path]:
+    """Files predating the dataset whose directory holds them.
+
+    An upload lands after its dataset row is written, so an earlier mtime means
+    the file was left by a previous dataset of the same slug.
+    """
+    import datetime
+    conn = sqlite3.connect(db_path, timeout=10)
+    conn.row_factory = sqlite3.Row
+    rows = list(conn.execute("SELECT user_id, slug, created_at FROM datasets"))
+    conn.close()
+
+    stale = []
+    for r in rows:
+        d = upload_dir / str(r["user_id"]) / r["slug"]
+        if not d.is_dir():
+            continue
+        try:
+            created = datetime.datetime.fromisoformat(r["created_at"]).timestamp()
+        except (TypeError, ValueError):
+            continue
+        for f in sorted(d.rglob("*")):
+            if f.is_file() and f.stat().st_mtime < created:
+                stale.append(f)
+    return stale
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -64,8 +96,9 @@ def main():
     args = ap.parse_args()
 
     orphans = find_orphans(args.db, args.uploads)
-    if not orphans:
-        print(f"No orphaned upload directories under {args.uploads}")
+    stale   = find_stale(args.db, args.uploads)
+    if not orphans and not stale:
+        print(f"Nothing to prune under {args.uploads}")
         return
 
     total = 0
@@ -76,8 +109,18 @@ def main():
         if args.delete:
             shutil.rmtree(d, ignore_errors=True)
 
+    for f in stale:
+        if not f.exists():
+            continue                      # already gone with an orphaned directory
+        size = f.stat().st_size
+        total += size
+        print(f"  {'removing' if args.delete else 'stale   '}  {f}  ({_human(size)}, "
+              f"predates its dataset)")
+        if args.delete:
+            f.unlink(missing_ok=True)
+
     verb = "Removed" if args.delete else "Would remove"
-    print(f"{verb} {len(orphans)} directory(ies), {_human(total)}")
+    print(f"{verb} {len(orphans)} directory(ies) and {len(stale)} stale file(s), {_human(total)}")
     if not args.delete:
         print("Re-run with --delete to remove them.")
 
