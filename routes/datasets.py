@@ -1,6 +1,7 @@
 """Dataset view, RDF upload, SPARQL proxy."""
 import json
 import os
+import shutil
 import uuid
 from pathlib import Path
 from flask import (Blueprint, render_template, request, redirect,
@@ -305,6 +306,24 @@ def sparql_endpoint(owner_orcid, slug):
     return jsonify(result)
 
 
+
+def _remove_upload_dir(ds):
+    """Delete the dataset's uploaded source files along with the dataset.
+
+    Deleting a dataset used to drop its graphs and its database row and leave
+    every file that had ever been uploaded to it on disk, unreferenced and
+    invisible — the only trace being a directory named after a slug that no
+    longer existed.
+    """
+    target = (config.UPLOAD_DIR / str(ds["user_id"]) / ds["slug"]).resolve()
+    root   = config.UPLOAD_DIR.resolve()
+    # A slug is constrained at creation, but resolve-and-check is cheap and this
+    # is an rmtree.
+    if root not in target.parents or not target.is_dir():
+        return
+    shutil.rmtree(target, ignore_errors=True)
+
+
 @bp.route("/<owner_orcid>/<slug>/delete", methods=["POST"])
 @login_required
 def delete(owner_orcid, slug):
@@ -316,6 +335,8 @@ def delete(owner_orcid, slug):
     ts = triplestore.get(ds)
     for suffix in triplestore.GRAPH_SUFFIXES:
         ts.drop_graph(ds["graph_base"] + suffix)
+
+    _remove_upload_dir(ds)
 
     db = get_db()
     db.execute("DELETE FROM datasets WHERE id = ?", (ds["id"],))

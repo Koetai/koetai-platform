@@ -137,6 +137,7 @@ def _process(job: dict):
             file_path.parent.mkdir(parents=True, exist_ok=True)
             ok, msg = web_scraper_service.download_file(source_url, file_path)
             if not ok:
+                _release_source(file_path, False)
                 _set("error", "downloading", f"Download failed: {msg}")
                 return
 
@@ -150,19 +151,21 @@ def _process(job: dict):
             try:
                 members = web_scraper_service.extract_rdf_files(file_path, extract_dir)
             except Exception as e:
+                _release_source(file_path, False)
+                shutil.rmtree(extract_dir, ignore_errors=True)
                 _set("error", "extracting", f"Extraction failed: {e}")
                 return
-            finally:
-                file_path.unlink(missing_ok=True)
 
             if not members:
-                _set("error", "extracting", "No RDF files found in archive")
+                _release_source(file_path, False)
                 shutil.rmtree(extract_dir, ignore_errors=True)
+                _set("error", "extracting", "No RDF files found in archive")
                 return
 
             ok, msg = _load_members(job, members, graph_uri, apply_owl, regime,
                                     replace, _set)
-            shutil.rmtree(extract_dir, ignore_errors=True)
+            shutil.rmtree(extract_dir, ignore_errors=True)   # members are derived
+            _release_source(file_path, ok)
             if not ok:
                 _set("error", "loading", msg)
                 return
@@ -201,6 +204,7 @@ def _process(job: dict):
                 load_path.unlink(missing_ok=True)  # remove intermediate NT
 
             if not ok:
+                _release_source(file_path, False)
                 _set("error", "reasoning", f"Reasoning failed: {msg}")
                 return
             load_path = reasoned
@@ -217,6 +221,7 @@ def _process(job: dict):
         conn.close()
 
         if ds_row is None:
+            _release_source(file_path, False)
             _set("error", "loading", "Dataset not found")
             return
 
@@ -240,15 +245,34 @@ def _process(job: dict):
             load_path.unlink(missing_ok=True)
 
         if not ok:
+            _release_source(file_path, False)
             _set("error", "loading", f"Loading failed: {msg}")
             return
 
+        _release_source(file_path, True)
         _mark_web_source_imported(job)
         _set("done", "done", msg or "Upload complete")
 
     except Exception as e:
+        _release_source(file_path, False)
         _set("error", "error", str(e))
 
+
+
+
+def _release_source(path: Path, loaded: bool):
+    """Drop the source file unless it is being kept.
+
+    A file whose load failed is never kept, whatever the setting says: nothing
+    refers to it, no retry reads it back, and leaving it behind was how a
+    rejected upload used to sit in the uploads directory for ever.
+    """
+    if loaded and config.KEEP_UPLOADED_SOURCES:
+        return
+    try:
+        Path(path).unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 def _load_members(job, members, graph_uri, apply_owl, regime, replace, _set):
