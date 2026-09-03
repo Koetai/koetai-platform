@@ -332,9 +332,22 @@ def delete(owner_orcid, slug):
         flash("Not found or not authorized.", "error")
         return redirect(url_for("dashboard.index"))
 
+    # Drop the data before the row that records where it lives. A failure here
+    # used to be discarded, so a dataset whose backend was slow or down lost its
+    # row and kept its triples — orphaned in the store with nothing left naming
+    # them. Stop instead, and let the user retry once the store is reachable.
     ts = triplestore.get(ds)
+    failed = []
     for suffix in triplestore.GRAPH_SUFFIXES:
-        ts.drop_graph(ds["graph_base"] + suffix)
+        ok, msg = ts.drop_graph(ds["graph_base"] + suffix)
+        if not ok:
+            failed.append(f"{ds['graph_base']}{suffix}: {msg}")
+    if failed:
+        flash("Could not remove this dataset's data from the triplestore, so "
+              "nothing was deleted — try again once the store is reachable. "
+              + "; ".join(failed)[:500], "error")
+        return redirect(url_for("datasets.view",
+                                owner_orcid=owner_orcid, slug=slug))
 
     _remove_upload_dir(ds)
 
