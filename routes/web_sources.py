@@ -1,9 +1,9 @@
 """Web download page sources — add, scan, import, update-check."""
-import re
 import uuid
 from pathlib import Path
 from flask import (Blueprint, render_template, request, redirect,
                    url_for, flash, jsonify)
+from werkzeug.utils import secure_filename
 from flask_login import login_required, current_user
 import config
 from services.db import get_db
@@ -15,19 +15,6 @@ from services.web_scraper_service import RDF_EXTENSIONS
 # too, and so members are streamed to disk rather than read into memory.
 _ARCHIVE_EXTS = web_scraper_service.ARCHIVE_EXTENSIONS
 _extract_rdf_files = web_scraper_service.extract_rdf_files
-
-
-_SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
-
-
-def _safe_name(filename: str) -> str:
-    """A filename from a scraped page, reduced to something safe to write.
-
-    Path().name drops any directory part; the rest guards against a remote page
-    naming a file in a way that escapes the upload directory.
-    """
-    name = _SAFE_NAME.sub("_", Path(filename).name).lstrip(".")
-    return name[:120] or "download"
 
 
 bp = Blueprint("web_sources", __name__, url_prefix="/u")
@@ -218,7 +205,7 @@ def import_files(owner_orcid, slug, source_id):
         # saved as "<uuid>.gz" loses the .nt, and the extractor then has to
         # guess the member's syntax — it guesses Turtle, which happens to parse
         # N-Triples but would be wrong for JSON-LD or RDF/XML.
-        dest = upload_dir / f"{uuid.uuid4().hex}_{_safe_name(row['filename'])}"
+        dest = upload_dir / f"{uuid.uuid4().hex}_{secure_filename(row['filename'])}"
         job_id = job_runner.submit(
             dataset_id=ds["id"],
             user_id=current_user.id,

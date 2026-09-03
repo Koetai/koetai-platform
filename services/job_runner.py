@@ -129,9 +129,9 @@ def _process(job: dict):
     source_url = job.get("source_url")
 
     try:
-        # Step 0: fetch, when the job owns its own download. Archives are the
-        # usual shape at this size, and one may hold several RDF files, so an
-        # archive fans out into several loads inside this one job.
+        # Step 0a: fetch, when the job owns its own download rather than being
+        # handed an upload. Keeps a multi-gigabyte transfer off the request
+        # thread, which would not survive it.
         if source_url:
             _set("running", "downloading", f"Downloading {job.get('source_label') or source_url}…")
             file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -140,30 +140,35 @@ def _process(job: dict):
                 _set("error", "downloading", f"Download failed: {msg}")
                 return
 
-            if file_path.suffix.lower() in web_scraper_service.ARCHIVE_EXTENSIONS:
-                _set("running", "extracting", "Extracting archive…")
-                extract_dir = file_path.parent / f"x_{job_id}"
-                try:
-                    members = web_scraper_service.extract_rdf_files(file_path, extract_dir)
-                except Exception as e:
-                    _set("error", "extracting", f"Extraction failed: {e}")
-                    return
-                finally:
-                    file_path.unlink(missing_ok=True)
-
-                if not members:
-                    _set("error", "extracting", "No RDF files found in archive")
-                    return
-
-                ok, msg = _load_members(job, members, graph_uri, apply_owl, regime,
-                                        replace, _set)
-                shutil.rmtree(extract_dir, ignore_errors=True)
-                if not ok:
-                    _set("error", "loading", msg)
-                    return
-                _mark_web_source_imported(job)
-                _set("done", "done", msg)
+        # Step 0b: unpack, however the archive arrived. Compressed RDF is the
+        # normal shape at this size — for an upload it is also what keeps the
+        # file under the request cap — and one archive may hold several RDF
+        # files, so it fans out into several loads inside this one job.
+        if file_path.suffix.lower() in web_scraper_service.ARCHIVE_EXTENSIONS:
+            _set("running", "extracting", f"Extracting {file_path.name}…")
+            extract_dir = file_path.parent / f"x_{job_id}"
+            try:
+                members = web_scraper_service.extract_rdf_files(file_path, extract_dir)
+            except Exception as e:
+                _set("error", "extracting", f"Extraction failed: {e}")
                 return
+            finally:
+                file_path.unlink(missing_ok=True)
+
+            if not members:
+                _set("error", "extracting", "No RDF files found in archive")
+                shutil.rmtree(extract_dir, ignore_errors=True)
+                return
+
+            ok, msg = _load_members(job, members, graph_uri, apply_owl, regime,
+                                    replace, _set)
+            shutil.rmtree(extract_dir, ignore_errors=True)
+            if not ok:
+                _set("error", "loading", msg)
+                return
+            _mark_web_source_imported(job)
+            _set("done", "done", msg)
+            return
 
     except Exception as e:
         _set("error", "error", str(e))

@@ -18,14 +18,22 @@
   <div class="card-body">
     <p class="text-muted small">
       Supported: <code>.ttl</code> <code>.nt</code> <code>.n3</code> <code>.rdf</code>
-      <code>.owl</code> <code>.trig</code> <code>.nq</code> <code>.jsonld</code> — max 500 MB.
+      <code>.owl</code> <code>.trig</code> <code>.nq</code> <code>.jsonld</code>,
+      and those compressed as <code>.gz</code> <code>.bz2</code> <code>.zip</code>
+      <code>.tgz</code> — max {{ max_upload_mb }} MB.
       Files are appended to the dataset's named graph; existing triples are not removed.
+    </p>
+    <p class="text-muted small">
+      The limit is on the uploaded bytes, so compressing first is usually the way
+      to bring a large graph in — a gzip is typically a tenth of the size. For
+      something larger still, the <a href="{{ url_for('web_sources.view', owner_orcid=ds.orcid_id, slug=ds.slug) }}">Web</a>
+      tab fetches straight from a URL and has no such limit.
     </p>
     <form id="uploadForm">
       <div class="mb-3">
         <label class="form-label">RDF file</label>
         <input type="file" class="form-control" id="rdfFile"
-               accept=".ttl,.nt,.n3,.rdf,.owl,.trig,.nq,.jsonld" required>
+               accept=".ttl,.nt,.n3,.rdf,.owl,.trig,.nq,.jsonld,.gz,.bz2,.zip,.tgz" required>
       </div>
 
       <div class="mb-3 border rounded p-3 bg-light" id="owlPanel" style="display:none">

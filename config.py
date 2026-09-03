@@ -118,6 +118,11 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 GRAPH_BASE = BASE_URL + "/u/{user}/{dataset}"
 
 ALLOWED_RDF_EXTENSIONS = {".ttl", ".nt", ".n3", ".rdf", ".owl", ".trig", ".nq", ".jsonld"}
+# Compressed RDF is how a large graph is normally published and normally kept:
+# the upload cap applies to the bytes on the wire, so a gzip both fits under it
+# and transfers in a fraction of the time. Accepted anywhere raw RDF is.
+ALLOWED_ARCHIVE_EXTENSIONS = {".zip", ".gz", ".bz2", ".tgz"}
+ALLOWED_UPLOAD_EXTENSIONS  = ALLOWED_RDF_EXTENSIONS | ALLOWED_ARCHIVE_EXTENSIONS
 # Browser upload cap, enforced by Flask against Content-Length. Large files are
 # better fetched server-side (Web sources), which this does not limit.
 MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "500"))

@@ -13,8 +13,11 @@
     body   { background: #f8f9fa; }
     .navbar { background: var(--koetai-blue) !important; }
     .navbar-brand { font-weight: 700; letter-spacing:.04em; color:#fff !important; }
-    .nav-link { color: rgba(255,255,255,.85) !important; }
-    .nav-link:hover { color:#fff !important; }
+    /* Scoped to the navbar: unscoped, this painted every .nav-link on the page
+       white, including the dataset and shape tabs, which sit on the light body
+       background and so became invisible. */
+    .navbar .nav-link { color: rgba(255,255,255,.85) !important; }
+    .navbar .nav-link:hover { color:#fff !important; }
     .badge-orcid { background:#a6ce39; color:#000; font-size:.75em; }
     .card-dataset { border-left: 4px solid var(--koetai-teal); }
     pre.shex, pre.mermaid-src { background:#1e1e1e; color:#d4d4d4;

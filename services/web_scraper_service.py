@@ -120,7 +120,7 @@ def download_file(url: str, dest: Path) -> tuple[bool, str]:
         return False, str(e)
 
 
-ARCHIVE_EXTENSIONS = {".zip", ".gz", ".bz2", ".tgz"}
+ARCHIVE_EXTENSIONS = config.ALLOWED_ARCHIVE_EXTENSIONS
 
 # 1 MiB: big enough that copying a multi-gigabyte member is not syscall-bound,
 # small enough to stay negligible against the process footprint.
