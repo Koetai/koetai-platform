@@ -63,7 +63,9 @@ def view(owner_orcid, slug):
         "SELECT * FROM shapes WHERE dataset_id = ? ORDER BY created_at DESC",
         (ds["id"],)
     ).fetchall()
-    return render_template("shapes.html", ds=ds, shapes=shapes)
+    # The validators are optional binaries; the page must know which are here.
+    tools = {"rudof": rudof_service.is_available(), "jena": jena_service.is_available()}
+    return render_template("shapes.html", ds=ds, shapes=shapes, tools=tools)
 
 
 def _rdf_source(ds, user_id, slug):
@@ -180,6 +182,14 @@ def validate(owner_orcid, slug):
         return jsonify({"error": "Shape not found"}), 404
 
     validator = request.json.get("validator", "rudof")  # rudof | jena
+    # The page hides the buttons when a validator is missing, but the endpoint
+    # is reachable on its own and used to answer with the raw FileNotFoundError.
+    installed = {"rudof": rudof_service.is_available(), "jena": jena_service.is_available()}
+    if not installed.get(validator):
+        name = "Apache Jena" if validator == "jena" else "RUDOF"
+        return jsonify({"error": f"{name} is not installed on this server, so shapes "
+                                 f"cannot be validated with it. Shape inference does not "
+                                 f"need it."}), 501
 
     if shape["format"] == "shex":
         if validator == "jena":

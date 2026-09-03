@@ -64,6 +64,61 @@ def infer_shex(rdf_file: Path, graph_uri: str = None,
             input_path.unlink(missing_ok=True)
 
 
+def _strip_shex_comments(text: str) -> str:
+    """Remove ShEx comments, leaving '#' that is part of a URI alone.
+
+    ShExer annotates every constraint with its coverage, and those comments
+    contain braces — "Cardinality: {1}". Anything that reads a shape body as
+    "up to the next closing brace" therefore stops in the middle of a comment,
+    which is exactly what the diagram builder used to do.
+    """
+    out = []
+    for line in text.splitlines():
+        angle = 0
+        quoted = False
+        kept = []
+        for ch in line:
+            if ch == '"' and not angle:
+                quoted = not quoted
+            elif ch == "<" and not quoted:
+                angle += 1
+            elif ch == ">" and not quoted and angle:
+                angle -= 1
+            elif ch == "#" and not angle and not quoted:
+                break            # a real comment: drop the rest of the line
+            kept.append(ch)
+        out.append("".join(kept).rstrip())
+    return "\n".join(out)
+
+
+def _shape_blocks(text: str):
+    """Yield (name, body) for each shape, matching braces rather than guessing.
+
+    Nesting is rare in inferred schemas but legal, and a regex that stops at the
+    first '}' silently truncates the shape and leaves the remainder to be
+    mistaken for another one.
+    """
+    i = 0
+    while True:
+        open_at = text.find("{", i)
+        if open_at == -1:
+            return
+        name = text[i:open_at].strip().splitlines()
+        name = name[-1].strip() if name else ""
+        depth, j = 1, open_at + 1
+        while j < len(text) and depth:
+            if text[j] == "{":
+                depth += 1
+            elif text[j] == "}":
+                depth -= 1
+            j += 1
+        if depth:
+            return                      # unbalanced; nothing sensible left
+        if name and not name.upper().startswith(("PREFIX", "BASE")):
+            yield name, text[open_at + 1: j - 1]
+        i = j
+
+
 def shex_to_mermaid(shex_str: str) -> str:
     """
     Convert a ShEx compact schema string to a Mermaid classDiagram.
@@ -84,24 +139,15 @@ def shex_to_mermaid(shex_str: str) -> str:
             return re.sub(r'\W', '_', local_part) or "Unknown"
         return re.sub(r'\W', '_', token) or "Unknown"
 
-    # Match shape blocks: name/URI optionally on one line, then { ... }
-    # Handles both `:Thing {` (same line) and `:Thing\n{` (next line)
-    shape_re = re.compile(
-        r'([:<\w][^\n{]*?)\s*\n?\s*\{([^}]*)\}',
-        re.DOTALL
-    )
+    # Comments go first: they carry braces, and a body read as "up to the next
+    # closing brace" would end inside one.
+    cleaned = _strip_shex_comments(shex_str)
 
     classes = {}
-    for m in shape_re.finditer(shex_str):
-        name_token = m.group(1).strip()
-        # Skip PREFIX declarations
-        if name_token.upper().startswith("PREFIX") or name_token.upper().startswith("BASE"):
-            continue
+    for name_token, body in _shape_blocks(cleaned):
         class_name = local(name_token)
-        if not class_name or class_name in ("_", ""):
+        if not class_name or class_name in ("_", "", "Unknown"):
             continue
-
-        body = m.group(2)
         props = []
         for line in body.splitlines():
             line = re.sub(r'(?<![<\S])#.*$', '', line).strip().rstrip(';').strip()
@@ -132,6 +178,21 @@ def shex_to_mermaid(shex_str: str) -> str:
 
             if prop:
                 props.append((prop, typ, card))
+
+        # ShExer emits one constraint per observed datatype, so a predicate with
+        # mixed values arrives several times over — datePublished as gYear, date
+        # and gYearMonth. Three identical rows differing only in type read as a
+        # mistake; one row naming the types it takes is the same information.
+        merged, order = {}, []
+        for prop, typ, card in props:
+            if prop not in merged:
+                merged[prop] = ([], card)
+                order.append(prop)
+            types, first_card = merged[prop]
+            if typ and typ not in types:
+                types.append(typ)
+        props = [(prop, "|".join(merged[prop][0]) or "IRI", merged[prop][1])
+                 for prop in order]
 
         classes[class_name] = props
 

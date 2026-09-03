@@ -5,6 +5,11 @@ from pathlib import Path
 import config
 
 
+def is_available() -> bool:
+    """Whether Jena's shex CLI is here. See rudof_service.is_available."""
+    return (Path(config.JENA_BIN) / "shex").is_file()
+
+
 def validate_shex(rdf_file: Path, shex_content: str) -> tuple[bool, str]:
     """
     Validate an RDF file against a ShEx schema using Jena's native shex CLI.
