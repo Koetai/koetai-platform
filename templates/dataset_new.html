@@ -48,7 +48,7 @@
             <label class="form-check-label{% if not b.available %} text-muted{% endif %}"
                    for="platform-{{ b.name }}">
               <strong>{{ b.label }}</strong>
-              {% if not b.available %}<span class="badge bg-secondary ms-1">not running</span>{% endif %}
+              {% if not b.available %}<span class="badge bg-secondary ms-1">{{ b.unavailable_label }}</span>{% endif %}
               {% if not b.tested %}<span class="badge bg-warning text-dark ms-1">untested</span>{% endif %}
               <span class="text-muted small d-block">{{ b.description }}</span>
             </label>

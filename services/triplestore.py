@@ -193,14 +193,18 @@ def get_by_name(platform: str):
 # `tested` marks the ones Koetai has actually been run against; the rest use the
 # same SPARQL 1.1 + Graph Store client and are configured the same way, but are
 # unproven, and saying so is more useful than listing them as equals.
+# label, description, tested, kind. `kind` decides how absence is described:
+# a server that is not up is "not running" and starting it is the fix, whereas
+# Comunica is a command-line tool that is either installed or not — calling that
+# "not running" sends you looking for a service that was never meant to exist.
 BACKEND_INFO = {
-    "fuseki":     ("Fuseki / Jena", "Apache Jena TDB2 — queryable as soon as an upload finishes. The safe default.", True),
-    "oxigraph":   ("Oxigraph",      "Lighter than Fuseki and just as durable. Needs Oxigraph 0.5.11 or later.", True),
-    "qlever":     ("QLever",        "Very fast over large read-mostly data, but Koetai cannot upload to it — querying an existing index only.", True),
-    "comunica":   ("Federation (Comunica)", "Not a store: holds no data and queries a list of external sources live.", True),
-    "virtuoso":   ("Virtuoso",      "Implemented but never tested against Koetai.", False),
-    "blazegraph": ("Blazegraph",    "Implemented but never tested against Koetai.", False),
-    "rdf4j":      ("RDF4J",         "Implemented but never tested against Koetai.", False),
+    "fuseki":     ("Fuseki / Jena", "Apache Jena TDB2 — queryable as soon as an upload finishes. The safe default.", True, "server"),
+    "oxigraph":   ("Oxigraph",      "Lighter than Fuseki and just as durable. Needs Oxigraph 0.5.11 or later.", True, "server"),
+    "qlever":     ("QLever",        "Very fast over large read-mostly data, but Koetai cannot upload to it — querying an existing index only.", True, "server"),
+    "comunica":   ("Federation (Comunica)", "Not a store: holds no data and queries a list of external SPARQL endpoints and RDF files live. Needs Node and @comunica/query-sparql on the server.", True, "tool"),
+    "virtuoso":   ("Virtuoso",      "Implemented but never tested against Koetai.", False, "server"),
+    "blazegraph": ("Blazegraph",    "Implemented but never tested against Koetai.", False, "server"),
+    "rdf4j":      ("RDF4J",         "Implemented but never tested against Koetai.", False, "server"),
 }
 
 
@@ -212,10 +216,11 @@ def backend_choices() -> list[dict]:
     """
     status = available()
     choices = []
-    for name, (label, blurb, tested) in BACKEND_INFO.items():
+    for name, (label, blurb, tested, kind) in BACKEND_INFO.items():
         choices.append({
             "name": name, "label": label, "description": blurb,
             "tested": tested, "available": status.get(name, False),
+            "unavailable_label": "not installed" if kind == "tool" else "not running",
         })
     # Reachable first, then the ones that have been proven, then by definition
     # order — so the top option is always something that will actually work.
