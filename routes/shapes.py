@@ -64,7 +64,8 @@ def view(owner_orcid, slug):
         (ds["id"],)
     ).fetchall()
     # The validators are optional binaries; the page must know which are here.
-    tools = {"rudof": rudof_service.is_available(), "jena": jena_service.is_available()}
+    tools = {"rudof": rudof_service.is_available(), "jena": jena_service.is_available(),
+             "rdfconfig": rdfconfig_service.is_available()}
     return render_template("shapes.html", ds=ds, shapes=shapes, tools=tools)
 
 

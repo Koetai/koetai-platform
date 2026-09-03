@@ -105,6 +105,18 @@
               <i class="bi bi-download me-2"></i>prefix.yaml
             </a>
           </li>
+          {% if not tools.rdfconfig and not sh.rdfconfig_svg %}
+          {# The YAML above comes from our own parser; the SVG and SPARQL skeleton
+             need the real rdf-config, which runs via Docker. Without it they were
+             never produced, and nothing said why. #}
+          <li><hr class="dropdown-divider"></li>
+          <li><span class="dropdown-item-text text-muted small" style="width:19rem;white-space:normal;line-height:1.35">
+            schema.svg and the SPARQL skeleton need
+            <a href="https://github.com/dbcls/rdf-config" target="_blank" rel="noopener">rdf-config</a>,
+            which runs via Docker and is not installed here. The Mermaid diagram
+            is generated without it.
+          </span></li>
+          {% endif %}
           {% if sh.rdfconfig_svg %}
           <li>
             <a class="dropdown-item" href="{{ url_for('shapes.download', owner_orcid=ds.orcid_id, slug=ds.slug, shape_id=sh.id, fmt='rdfconfig_svg') }}">
