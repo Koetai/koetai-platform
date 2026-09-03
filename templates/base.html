@@ -16,6 +16,12 @@
        its mt-5, which still spaces it off long content. */
     body   { background: #f8f9fa; min-height: 100vh; display: flex; flex-direction: column; }
     .page-content { flex: 1 0 auto; }
+    /* Kill the elastic overscroll: flicking up and down used to rubber-band the
+       whole page past its ends. 'none' rather than 'contain' because contain
+       only stops the scroll chaining to the parent and leaves the bounce itself.
+       Set on html, which is the element that governs the viewport; on body alone
+       it is not guaranteed to propagate the way overflow does. */
+    html, body { overscroll-behavior-y: none; }
     .navbar { background: var(--koetai-blue) !important; }
     .navbar-brand { font-weight: 700; letter-spacing:.04em; color:#fff !important; }
     /* Scoped to the navbar: unscoped, this painted every .nav-link on the page
@@ -51,7 +57,10 @@
        text-overflow:ellipsis; white-space:nowrap; vertical-align:bottom; }
     .card-dataset { border-left: 4px solid var(--koetai-teal); }
     pre.shex, pre.mermaid-src { background:#1e1e1e; color:#d4d4d4;
-      border-radius:.4rem; padding:1rem; font-size:.8rem; max-height:400px; overflow:auto; }
+      border-radius:.4rem; padding:1rem; font-size:.8rem; max-height:400px; overflow:auto;
+      /* Same annoyance one level down: scrolling to the end of a capped code
+         block handed the rest of the gesture to the page, which then jumped. */
+      overscroll-behavior: contain; }
     .mermaid { background:#fff; border:1px solid #dee2e6; border-radius:.4rem; padding:1rem; }
   </style>
   {% block head %}{% endblock %}
