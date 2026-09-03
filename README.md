@@ -114,6 +114,43 @@ Protocol, so supporting another compliant store is a few lines in
 > [#1835](https://github.com/oxigraph/oxigraph/issues/1835)), which
 > `ghcr.io/oxigraph/oxigraph:latest` now resolves to.
 
+### Disk usage
+
+Two things surprise people here, and both bite hardest on the large datasets
+these stores exist for.
+
+**An index is several times its source.** A 203 MB N-Triples file (2.4M triples)
+became about 1.1 GB of TDB2. That was synthetic data with every subject and
+literal distinct, so it is close to a worst case for dictionary compression —
+real vocabulary repeats and does better — but budget a multiple of the raw size,
+not a margin on it. Uploaded sources are stored too unless
+`KEEP_UPLOADED_SOURCES=false` (see `.env.example`).
+
+**Deleting data does not give the space back.** Neither store returns freed
+pages to the filesystem; they keep them for reuse. After deleting every dataset,
+an instance reporting *zero graphs* still held 6.8 GB of Fuseki and 7.3 GB of
+Oxigraph. Nothing is wrong — but "no triples" and "no disk used" are unrelated,
+and a workflow that loads and drops big graphs grows the high-water mark, not
+the current size. Size a host for the former.
+
+To actually reclaim it:
+
+```bash
+# Fuseki — compact, then delete the generation it superseded. Compaction writes
+# a new Data-NNNN beside the old one; without the second step the directory
+# briefly gets *bigger*.
+curl -u admin:PASSWORD -X POST http://localhost:3030/\$/compact/koetai
+#   ... wait for the task to finish (GET /$/tasks), then:
+rm -rf /fuseki/databases/koetai/Data-0001     # the lower-numbered one
+
+# Oxigraph — needs exclusive access, so stop the server first
+oxigraph optimize --location /data
+```
+
+Those took a Fuseki volume from 6.8 GB to 201 MB and an Oxigraph one from 7.3 GB
+to 83 MB. On a local install `docker compose down -v` is the blunter equivalent,
+and destroys the data with it.
+
 ### Federation datasets (Comunica)
 
 A dataset with `platform='comunica'` is **virtual**: it stores no data of its own
