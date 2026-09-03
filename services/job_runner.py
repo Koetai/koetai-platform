@@ -4,6 +4,7 @@ Background upload/reasoning job runner.
 Jobs are stored in the upload_jobs SQLite table.
 A single daemon thread picks up queued jobs and processes them one at a time.
 """
+import shutil
 import threading
 import sqlite3
 import time
@@ -12,6 +13,7 @@ from pathlib import Path
 
 import config
 from services import owl_service
+from services import web_scraper_service
 
 _lock   = threading.Lock()
 _thread = None
@@ -20,17 +22,27 @@ _thread = None
 # ── Job creation ──────────────────────────────────────────────────────────────
 
 def submit(dataset_id: int, user_id: int, file_path: Path, graph_uri: str,
-           apply_owl: bool, owl_regime: str, replace_data: bool) -> str:
-    """Insert a new upload job and return its ID."""
+           apply_owl: bool, owl_regime: str, replace_data: bool,
+           source_url: str = None, source_label: str = None,
+           web_source_file_id: int = None) -> str:
+    """Insert a new upload job and return its ID.
+
+    With `source_url`, the job downloads the file itself and `file_path` is
+    where it will land rather than a file that already exists. That keeps a
+    multi-gigabyte fetch off the request thread, where it would outlive
+    gunicorn's timeout long before it finished.
+    """
     job_id = str(uuid.uuid4())
     conn = _raw_conn()
     with conn:
         conn.execute(
             "INSERT INTO upload_jobs "
-            "(id, dataset_id, user_id, file_path, graph_uri, apply_owl, owl_regime, replace_data) "
-            "VALUES (?,?,?,?,?,?,?,?)",
+            "(id, dataset_id, user_id, file_path, graph_uri, apply_owl, owl_regime, "
+            " replace_data, source_url, source_label, web_source_file_id) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             (job_id, dataset_id, user_id, str(file_path),
-             graph_uri, int(apply_owl), owl_regime, int(replace_data))
+             graph_uri, int(apply_owl), owl_regime, int(replace_data),
+             source_url, source_label, web_source_file_id)
         )
     conn.close()
     _ensure_runner()
@@ -41,7 +53,8 @@ def get_status(job_id: str) -> dict | None:
     """Return job status dict or None if not found."""
     conn = _raw_conn()
     row = conn.execute(
-        "SELECT id, status, phase, message, created_at, finished_at FROM upload_jobs WHERE id=?",
+        "SELECT id, status, phase, message, source_label, created_at, finished_at "
+        "FROM upload_jobs WHERE id=?",
         (job_id,)
     ).fetchone()
     conn.close()
@@ -113,6 +126,49 @@ def _process(job: dict):
                 )
         conn.close()
 
+    source_url = job.get("source_url")
+
+    try:
+        # Step 0: fetch, when the job owns its own download. Archives are the
+        # usual shape at this size, and one may hold several RDF files, so an
+        # archive fans out into several loads inside this one job.
+        if source_url:
+            _set("running", "downloading", f"Downloading {job.get('source_label') or source_url}…")
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            ok, msg = web_scraper_service.download_file(source_url, file_path)
+            if not ok:
+                _set("error", "downloading", f"Download failed: {msg}")
+                return
+
+            if file_path.suffix.lower() in web_scraper_service.ARCHIVE_EXTENSIONS:
+                _set("running", "extracting", "Extracting archive…")
+                extract_dir = file_path.parent / f"x_{job_id}"
+                try:
+                    members = web_scraper_service.extract_rdf_files(file_path, extract_dir)
+                except Exception as e:
+                    _set("error", "extracting", f"Extraction failed: {e}")
+                    return
+                finally:
+                    file_path.unlink(missing_ok=True)
+
+                if not members:
+                    _set("error", "extracting", "No RDF files found in archive")
+                    return
+
+                ok, msg = _load_members(job, members, graph_uri, apply_owl, regime,
+                                        replace, _set)
+                shutil.rmtree(extract_dir, ignore_errors=True)
+                if not ok:
+                    _set("error", "loading", msg)
+                    return
+                _mark_web_source_imported(job)
+                _set("done", "done", msg)
+                return
+
+    except Exception as e:
+        _set("error", "error", str(e))
+        return
+
     _set("running", "parsing", "Parsing RDF file…")
 
     try:
@@ -176,10 +232,90 @@ def _process(job: dict):
             _set("error", "loading", f"Loading failed: {msg}")
             return
 
+        _mark_web_source_imported(job)
         _set("done", "done", msg or "Upload complete")
 
     except Exception as e:
         _set("error", "error", str(e))
+
+
+
+def _load_members(job, members, graph_uri, apply_owl, regime, replace, _set):
+    """Load each RDF file extracted from one archive into the dataset's graph.
+
+    Only the first load may replace the graph; the rest must append, or each
+    member would wipe the one before it.
+    """
+    from services import triplestore
+
+    conn = _raw_conn()
+    ds_row = conn.execute("SELECT * FROM datasets WHERE id=?", (job["dataset_id"],)).fetchone()
+    conn.close()
+    if ds_row is None:
+        return False, "Dataset not found"
+    ts = triplestore.get(dict(ds_row))
+
+    loaded, errors = 0, []
+    for i, member in enumerate(members, 1):
+        _set("running", "loading", f"Loading {member.name} ({i} of {len(members)})…")
+        load_path = member
+        if apply_owl and member.suffix.lower() in (".owl", ".rdf"):
+            ok_r, reasoned, owl_msg = owl_service.materialize(member, regime=regime)
+            if not ok_r:
+                errors.append(f"{member.name} (OWL): {owl_msg}")
+                continue
+            load_path = reasoned
+
+        if replace and i == 1:
+            ok, msg = ts.replace_graph(graph_uri, load_path)
+        else:
+            ok, msg = ts.load_rdf_file(graph_uri, load_path)
+
+        if load_path != member:
+            load_path.unlink(missing_ok=True)
+        if ok:
+            loaded += 1
+        else:
+            errors.append(f"{member.name}: {msg}")
+
+    if not loaded:
+        return False, "; ".join(errors) or "Nothing loaded"
+    summary = f"Loaded {loaded} of {len(members)} file(s) into <{graph_uri}>"
+    if errors:
+        summary += f" — {len(errors)} failed: " + "; ".join(errors)
+    return True, summary
+
+
+def _mark_web_source_imported(job):
+    """Record a successful import against the web source row, if this job has one.
+
+    The route used to do this inline; with the load asynchronous, only the job
+    knows whether it actually succeeded.
+    """
+    fid = job.get("web_source_file_id")
+    if not fid:
+        return
+    try:
+        conn = _raw_conn()
+        row = conn.execute("SELECT * FROM web_source_files WHERE id=?", (fid,)).fetchone()
+        if row is None:
+            conn.close()
+            return
+        meta = web_scraper_service._head_file(row["url"])
+        with conn:
+            conn.execute(
+                "UPDATE web_source_files SET imported_at=datetime('now'), etag=?, "
+                "last_modified=? WHERE id=?",
+                (meta.get("etag") or row["etag"],
+                 meta.get("last_modified") or row["last_modified"], fid)
+            )
+            conn.execute(
+                "UPDATE web_sources SET last_imported_at=datetime('now') WHERE id=?",
+                (row["source_id"],)
+            )
+        conn.close()
+    except Exception:
+        pass          # bookkeeping must never fail a load that already succeeded
 
 
 def _raw_conn():

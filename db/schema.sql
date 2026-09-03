@@ -114,6 +114,11 @@ CREATE TABLE IF NOT EXISTS upload_jobs (
     apply_owl   INTEGER NOT NULL DEFAULT 0,
     owl_regime  TEXT    NOT NULL DEFAULT 'OWL_RL',
     replace_data INTEGER NOT NULL DEFAULT 0,
+    -- Set when the job fetches its own file instead of receiving an upload.
+    -- file_path is then where the download will land, not a file that exists yet.
+    source_url  TEXT,
+    source_label TEXT,
+    web_source_file_id INTEGER,
     created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
     finished_at TEXT
 );

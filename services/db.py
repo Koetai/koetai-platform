@@ -21,12 +21,36 @@ def close_db(e=None):
         db.close()
 
 
+# Columns added to existing tables after the first release. CREATE TABLE IF NOT
+# EXISTS leaves an existing table alone, so a new column in schema.sql would
+# never reach a database that already has one. Adding a nullable column is safe
+# and reversible, so it runs at startup rather than as a migration script.
+_ADDED_COLUMNS = {
+    "upload_jobs": [
+        ("source_url", "TEXT"),
+        ("source_label", "TEXT"),
+        ("web_source_file_id", "INTEGER"),
+    ],
+}
+
+
+def _add_missing_columns(conn):
+    for table, columns in _ADDED_COLUMNS.items():
+        have = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+        if not have:
+            continue                      # table absent; schema.sql will create it
+        for name, decl in columns:
+            if name not in have:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
+
+
 def init_db():
     schema = (Path(__file__).parent.parent / "db" / "schema.sql").read_text()
     conn = sqlite3.connect(config.DB_PATH, timeout=10)
     conn.execute("PRAGMA journal_mode = WAL")
     with conn:
         conn.executescript(schema)
+        _add_missing_columns(conn)
     conn.close()
     if config.IS_LOCAL:
         ensure_local_user()

@@ -118,4 +118,12 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 GRAPH_BASE = BASE_URL + "/u/{user}/{dataset}"
 
 ALLOWED_RDF_EXTENSIONS = {".ttl", ".nt", ".n3", ".rdf", ".owl", ".trig", ".nq", ".jsonld"}
-MAX_UPLOAD_MB = 500
+# Browser upload cap, enforced by Flask against Content-Length. Large files are
+# better fetched server-side (Web sources), which this does not limit.
+MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "500"))
+# How long a single load into a triplestore may take. Loading is bounded by the
+# store, not the network: roughly 200 MB of N-Triples per 75 s into Fuseki on a
+# laptop, so the old 300 s ceiling failed part-way through anything much over
+# half a gigabyte. An hour is generous rather than tight; a job that hits it is
+# stuck, not slow.
+RDF_LOAD_TIMEOUT = int(os.environ.get("RDF_LOAD_TIMEOUT", "3600"))

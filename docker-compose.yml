@@ -10,7 +10,6 @@
 #
 #   docker compose --profile oxigraph up -d     # lighter than Fuseki
 #   docker compose --profile virtuoso up -d
-#   docker compose --profile qlever up -d       # read-heavy; see the note below
 #
 # Profiles are additive, so you can run several at once and pick the backend per
 # dataset. Whichever you run, set the dataset's `platform` field to match.
@@ -38,7 +37,10 @@ services:
       # The Fuseki image starts secured, so writes need these.
       - FUSEKI_USER=${FUSEKI_USER:-admin}
       - FUSEKI_PASSWORD=${FUSEKI_ADMIN_PASSWORD:-change-me}
-      - QLEVER_PLATFORM_URL=http://qlever:7030
+      # QLever is not run here — it needs an index built offline and is better
+      # given its own host. Point this at one to use it: a dataset with
+      # platform='qlever' then queries it like any other backend.
+      - QLEVER_PLATFORM_URL=${QLEVER_PLATFORM_URL:-}
       - OXIGRAPH_URL=http://oxigraph:7878
       - VIRTUOSO_URL=http://virtuoso:8890
       - VIRTUOSO_USER=${VIRTUOSO_USER:-dba}
@@ -55,7 +57,7 @@ services:
     image: stain/jena-fuseki:latest
     restart: unless-stopped
     environment:
-      - JVM_ARGS=-Xmx${FUSEKI_HEAP:-2g}
+      - JVM_ARGS=-Xmx${FUSEKI_HEAP:-4g}
       - ADMIN_PASSWORD=${FUSEKI_ADMIN_PASSWORD:-change-me}
       - FUSEKI_DATASET_1=${FUSEKI_DATASET:-koetai}
     expose:
@@ -108,34 +110,11 @@ services:
     networks:
       - koetai
 
-  # ───────────────────────────────────────────────────────────────────────────
-  # QLever — fastest for large read-heavy data, but the worst fit for uploads:
-  # it has no Graph Store Protocol, and it DISCARDS SPARQL UPDATEs on shutdown
-  # unless --persist-updates is set (it is, below). Bulk data is meant to be
-  # indexed offline rather than inserted. Prefer Fuseki/Oxigraph for a local
-  # install unless you specifically want QLever's query performance.
-  # ───────────────────────────────────────────────────────────────────────────
-  qlever:
-    image: adfreiburg/qlever:latest
-    restart: unless-stopped
-    profiles: ["qlever"]
-    entrypoint: ["/qlever/qlever-server"]
-    command: >
-      -i /data/platform -p 7030 -m ${QLEVER_MEMORY:-5G} -c 2G -s 30s
-      -a ${QLEVER_TOKEN:-platform} --persist-updates
-    expose:
-      - "7030"
-    volumes:
-      - qlever-data:/data
-    networks:
-      - koetai
-
 volumes:
   koetai-data:
   fuseki-data:
   oxigraph-data:
   virtuoso-data:
-  qlever-data:
 
 networks:
   koetai:

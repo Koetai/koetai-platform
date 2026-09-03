@@ -1,4 +1,9 @@
 """Web page scraper — finds RDF/OWL download links on a page and tracks updates."""
+import zipfile
+import tarfile
+import shutil
+import gzip
+import bz2
 import requests
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
@@ -113,3 +118,54 @@ def download_file(url: str, dest: Path) -> tuple[bool, str]:
         return True, str(dest)
     except Exception as e:
         return False, str(e)
+
+
+ARCHIVE_EXTENSIONS = {".zip", ".gz", ".bz2", ".tgz"}
+
+# 1 MiB: big enough that copying a multi-gigabyte member is not syscall-bound,
+# small enough to stay negligible against the process footprint.
+_COPY_CHUNK = 1024 * 1024
+
+
+def extract_rdf_files(archive_path: Path, dest_dir: Path) -> list[Path]:
+    """Extract the RDF files from an archive, returning the paths written.
+
+    Every member is streamed with copyfileobj rather than read into a bytes
+    object. A gzipped dump is the normal way a multi-gigabyte graph is
+    published, and decompressing one in memory needs the whole expansion at
+    once — which is precisely the size this path exists to handle.
+    """
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    suffix   = archive_path.suffix.lower()
+    suffixes = [s.lower() for s in archive_path.suffixes]
+    extracted = []
+
+    def _spill(fsrc, out: Path):
+        with open(out, "wb") as f_out:
+            shutil.copyfileobj(fsrc, f_out, _COPY_CHUNK)
+        extracted.append(out)
+
+    if suffix == ".zip":
+        with zipfile.ZipFile(archive_path) as zf:
+            for name in zf.namelist():
+                if Path(name).suffix.lower() in RDF_EXTENSIONS:
+                    with zf.open(name) as f_in:
+                        _spill(f_in, dest_dir / Path(name).name)
+
+    elif suffix == ".tgz" or (suffix == ".gz" and ".tar" in suffixes):
+        with tarfile.open(archive_path, "r|*") as tf:      # streaming mode
+            for member in tf:
+                if member.isfile() and Path(member.name).suffix.lower() in RDF_EXTENSIONS:
+                    f_in = tf.extractfile(member)
+                    if f_in:
+                        _spill(f_in, dest_dir / Path(member.name).name)
+
+    elif suffix in (".gz", ".bz2"):
+        opener = gzip.open if suffix == ".gz" else bz2.open
+        inner_name = archive_path.stem       # "data.ttl" from "data.ttl.gz"
+        inner_ext  = Path(inner_name).suffix.lower()
+        out_name   = inner_name if inner_ext in RDF_EXTENSIONS else inner_name + ".ttl"
+        with opener(archive_path, "rb") as f_in:
+            _spill(f_in, dest_dir / out_name)
+
+    return extracted

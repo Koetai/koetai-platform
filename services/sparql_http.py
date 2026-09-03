@@ -14,6 +14,8 @@ from typing import NamedTuple, Optional
 
 import requests
 
+import config
+
 
 class Scope(NamedTuple):
     """The set of graphs a query is allowed to see.
@@ -92,7 +94,7 @@ class SparqlHttpStore:
         gsp_param: str = "graph",
         auth=None,
         query_timeout: int = 120,
-        load_timeout: int = 300,
+        load_timeout: int = None,
     ):
         self.name = name
         self.base_url = base_url.rstrip("/")
@@ -103,7 +105,7 @@ class SparqlHttpStore:
         self.gsp_param = gsp_param
         self.auth = auth
         self.query_timeout = query_timeout
-        self.load_timeout = load_timeout
+        self.load_timeout = load_timeout if load_timeout is not None else config.RDF_LOAD_TIMEOUT
 
     def _url(self, path: str) -> str:
         return f"{self.base_url}{path}"

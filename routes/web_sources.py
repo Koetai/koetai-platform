@@ -1,66 +1,34 @@
 """Web download page sources — add, scan, import, update-check."""
-import bz2
-import gzip
-import tarfile
+import re
 import uuid
-import zipfile
 from pathlib import Path
 from flask import (Blueprint, render_template, request, redirect,
                    url_for, flash, jsonify)
 from flask_login import login_required, current_user
 import config
 from services.db import get_db
-from services import triplestore, owl_service
+from services import job_runner, triplestore, owl_service
 from services import web_scraper_service
 from services.web_scraper_service import RDF_EXTENSIONS
 
-_ARCHIVE_EXTS = {".zip", ".gz", ".bz2", ".tgz"}
+# Archive handling moved to web_scraper_service so the job runner can use it
+# too, and so members are streamed to disk rather than read into memory.
+_ARCHIVE_EXTS = web_scraper_service.ARCHIVE_EXTENSIONS
+_extract_rdf_files = web_scraper_service.extract_rdf_files
 
 
-def _extract_rdf_files(archive_path: Path, dest_dir: Path) -> list[Path]:
-    """Extract RDF files from an archive. Returns list of paths to extracted files."""
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    suffix   = archive_path.suffix.lower()
-    suffixes = [s.lower() for s in archive_path.suffixes]
-    extracted = []
+_SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
 
-    if suffix == ".zip":
-        with zipfile.ZipFile(archive_path) as zf:
-            for name in zf.namelist():
-                if Path(name).suffix.lower() in RDF_EXTENSIONS:
-                    out = dest_dir / Path(name).name
-                    out.write_bytes(zf.read(name))
-                    extracted.append(out)
 
-    elif suffix == ".tgz" or (suffix == ".gz" and ".tar" in suffixes):
-        with tarfile.open(archive_path) as tf:
-            for member in tf.getmembers():
-                if member.isfile() and Path(member.name).suffix.lower() in RDF_EXTENSIONS:
-                    f = tf.extractfile(member)
-                    if f:
-                        out = dest_dir / Path(member.name).name
-                        out.write_bytes(f.read())
-                        extracted.append(out)
+def _safe_name(filename: str) -> str:
+    """A filename from a scraped page, reduced to something safe to write.
 
-    elif suffix == ".gz":
-        inner_name = archive_path.stem          # e.g. "data.ttl" from "data.ttl.gz"
-        inner_ext  = Path(inner_name).suffix.lower()
-        out_name   = inner_name if inner_ext in RDF_EXTENSIONS else inner_name + ".ttl"
-        out = dest_dir / out_name
-        with gzip.open(archive_path, "rb") as f_in:
-            out.write_bytes(f_in.read())
-        extracted.append(out)
+    Path().name drops any directory part; the rest guards against a remote page
+    naming a file in a way that escapes the upload directory.
+    """
+    name = _SAFE_NAME.sub("_", Path(filename).name).lstrip(".")
+    return name[:120] or "download"
 
-    elif suffix == ".bz2":
-        inner_name = archive_path.stem
-        inner_ext  = Path(inner_name).suffix.lower()
-        out_name   = inner_name if inner_ext in RDF_EXTENSIONS else inner_name + ".ttl"
-        out = dest_dir / out_name
-        with bz2.open(archive_path, "rb") as f_in:
-            out.write_bytes(f_in.read())
-        extracted.append(out)
-
-    return extracted
 
 bp = Blueprint("web_sources", __name__, url_prefix="/u")
 
@@ -230,122 +198,42 @@ def import_files(owner_orcid, slug, source_id):
         return jsonify({"error": "No files selected"}), 400
 
     graph_uri  = ds["graph_base"] + "/data"
-    ts         = triplestore.get(ds)
     upload_dir = config.UPLOAD_DIR / str(current_user.id) / slug / "web"
-    OWL_EXTS   = {".owl", ".rdf"}
 
-    # Read all file rows up front, then release the read transaction before
-    # the long network/triplestore operations to avoid holding the DB lock.
-    rows = {}
+    # Queue one job per file and return immediately. Downloading and loading
+    # used to happen here, inside the request: fine for a few megabytes, fatal
+    # for the gigabyte-scale dumps this feature exists to fetch, because
+    # gunicorn kills the worker long before the load finishes.
+    jobs, errors = [], []
     for fid in file_ids:
         row = db.execute(
             "SELECT * FROM web_source_files WHERE id = ? AND source_id = ?",
             (fid, source_id)
         ).fetchone()
-        if row:
-            rows[fid] = dict(row)
-    db.commit()  # release any implicit read transaction
+        if not row:
+            errors.append(f"File id {fid} not found")
+            continue
 
-    imported = []
-    errors   = []
+        # Keep the published name, not just its last suffix. "species.nt.gz"
+        # saved as "<uuid>.gz" loses the .nt, and the extractor then has to
+        # guess the member's syntax — it guesses Turtle, which happens to parse
+        # N-Triples but would be wrong for JSON-LD or RDF/XML.
+        dest = upload_dir / f"{uuid.uuid4().hex}_{_safe_name(row['filename'])}"
+        job_id = job_runner.submit(
+            dataset_id=ds["id"],
+            user_id=current_user.id,
+            file_path=dest,
+            graph_uri=graph_uri,
+            apply_owl=apply_owl,
+            owl_regime=owl_regime,
+            replace_data=False,
+            source_url=row["url"],
+            source_label=row["filename"],
+            web_source_file_id=fid,
+        )
+        jobs.append({"job_id": job_id, "filename": row["filename"]})
 
-    try:
-        for fid in file_ids:
-            if fid not in rows:
-                errors.append(f"File id {fid} not found")
-                continue
-            row = rows[fid]
-
-            ext  = Path(row["filename"]).suffix.lower()
-            dest = upload_dir / f"{uuid.uuid4().hex}{ext}"
-            ok, msg = web_scraper_service.download_file(row["url"], dest)
-            if not ok:
-                errors.append(f"{row['filename']}: {msg}")
-                continue
-
-            # ── Archive: extract RDF files then load each ──────────────────
-            if ext in _ARCHIVE_EXTS:
-                extract_dir = upload_dir / f"x_{uuid.uuid4().hex}"
-                try:
-                    rdf_paths = _extract_rdf_files(dest, extract_dir)
-                except Exception as e:
-                    errors.append(f"{row['filename']}: extraction failed — {e}")
-                    dest.unlink(missing_ok=True)
-                    continue
-                finally:
-                    dest.unlink(missing_ok=True)
-
-                if not rdf_paths:
-                    errors.append(f"{row['filename']}: no RDF files found in archive")
-                    extract_dir.rmdir()
-                    continue
-
-                loaded_any = False
-                for rdf_path in rdf_paths:
-                    load_path = rdf_path
-                    if apply_owl and rdf_path.suffix.lower() in OWL_EXTS:
-                        ok_r, reasoned, owl_msg = owl_service.materialize(rdf_path, regime=owl_regime)
-                        if ok_r:
-                            load_path = reasoned
-                        else:
-                            errors.append(f"{row['filename']}/{rdf_path.name} (OWL): {owl_msg}")
-                            rdf_path.unlink(missing_ok=True)
-                            continue
-                    ok, msg = ts.load_rdf_file(graph_uri, load_path)
-                    if load_path != rdf_path:
-                        load_path.unlink(missing_ok=True)
-                    rdf_path.unlink(missing_ok=True)
-                    if not ok:
-                        errors.append(f"{row['filename']}/{rdf_path.name}: {msg}")
-                    else:
-                        loaded_any = True
-                try:
-                    extract_dir.rmdir()
-                except OSError:
-                    pass
-                if loaded_any:
-                    meta = web_scraper_service._head_file(row["url"])
-                    db.execute(
-                        "UPDATE web_source_files SET imported_at=datetime('now'), etag=?, last_modified=? WHERE id=?",
-                        (meta.get("etag") or row["etag"], meta.get("last_modified") or row["last_modified"], fid)
-                    )
-                    db.commit()
-                    imported.append(row["filename"])
-                continue
-
-            # ── Plain RDF file ─────────────────────────────────────────────
-            load_path = dest
-            if apply_owl and ext in OWL_EXTS:
-                ok_r, reasoned, owl_msg = owl_service.materialize(dest, regime=owl_regime)
-                if ok_r:
-                    load_path = reasoned
-                else:
-                    errors.append(f"{row['filename']} (OWL reasoning): {owl_msg}")
-                    continue
-
-            ok, msg = ts.load_rdf_file(graph_uri, load_path)
-            if load_path != dest:
-                load_path.unlink(missing_ok=True)
-            if not ok:
-                errors.append(f"{row['filename']}: {msg}")
-            else:
-                meta = web_scraper_service._head_file(row["url"])
-                db.execute(
-                    "UPDATE web_source_files SET imported_at=datetime('now'), etag=?, last_modified=? WHERE id=?",
-                    (meta.get("etag") or row["etag"], meta.get("last_modified") or row["last_modified"], fid)
-                )
-                db.commit()
-                imported.append(row["filename"])
-
-        if imported:
-            db.execute("UPDATE web_sources SET last_imported_at=datetime('now') WHERE id=?",
-                       (source_id,))
-            db.commit()
-
-    except Exception as e:
-        return jsonify({"imported": imported, "errors": errors + [f"Unexpected error: {e}"]}), 500
-
-    return jsonify({"imported": imported, "errors": errors})
+    return jsonify({"jobs": jobs, "errors": errors})
 
 
 @bp.route("/<owner_orcid>/<slug>/web/<int:source_id>/delete", methods=["POST"])

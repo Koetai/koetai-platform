@@ -37,5 +37,8 @@ HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
 # per-process daemon thread that polls the jobs table; a second worker would
 # start a second runner and the two would race to claim the same upload job.
 # Scale with threads instead.
+# --timeout covers the slowest single request, which is a large browser upload
+# streaming in; loading is asynchronous and does not count against it. Web
+# sources bypass this path entirely by downloading inside the job.
 CMD ["gunicorn", "--bind", "0.0.0.0:3002", "--workers", "1", "--threads", "8", \
-     "--timeout", "300", "app:app"]
+     "--timeout", "1800", "app:app"]
