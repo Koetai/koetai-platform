@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_provenance.html' import badge_qlever, badge_fuseki %}
+{% from '_provenance.html' import badge_platform %}
 {% from '_ds_nav.html' import ds_nav with context %}
 {% block title %}{{ ds.label }}{% endblock %}
 {% block content %}
@@ -24,7 +24,7 @@
         {% elif triple_count == 0 %}empty — no data loaded yet
         {% else %}not indexed{% endif %}
       </span>
-      {% if ds.platform == 'fuseki' %}{{ badge_fuseki() }}{% else %}{{ badge_qlever() }}{% endif %}
+      {{ badge_platform(ds.platform) }}
       {% endif %}
       {% if not ds.is_public %}<span class="badge bg-secondary">private</span>{% endif %}
     </div>
