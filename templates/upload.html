@@ -38,15 +38,19 @@
         <div id="owlOptions" style="display:none">
           <label class="form-label small text-muted">Reasoning regime</label>
           <select class="form-select form-select-sm w-auto" id="owlRegime" name="owl_regime">
-            <option value="RDFS" selected>RDFS (fast — seconds, recommended)</option>
-            <option value="OWL_RL">OWL RL (slow for large files — may take hours)</option>
+            {# RDFS runs through Jena's `infer`; OWL RL is the owlrl Python package
+               and needs nothing external. Offering RDFS without Jena — and as the
+               default — made the recommended choice the one that could not run. #}
+            <option value="RDFS" {% if jena_available %}selected{% else %}disabled{% endif %}>RDFS (fast — seconds, recommended){% if not jena_available %} — needs Apache Jena, not installed{% endif %}</option>
+            <option value="OWL_RL" {% if not jena_available %}selected{% endif %}>OWL RL (slow for large files — may take hours)</option>
             <option value="OWL_RL_Extras">OWL RL + Extensions (slowest)</option>
           </select>
           <div id="owlWarn" class="alert alert-warning py-1 px-2 mt-2 small" style="display:none">
             <i class="bi bi-exclamation-triangle"></i>
             <strong>OWL RL on large files can take hours.</strong>
             The job runs in the background — you can close this tab and check back.
-            Consider <strong>RDFS</strong> for faster results.
+            {% if jena_available %}Consider <strong>RDFS</strong> for faster results.
+            {% else %}RDFS would be faster, but needs Apache Jena, which is not installed here.{% endif %}
           </div>
           <div class="form-text mt-1">Materializes inferred triples before loading. Runs as a background job.</div>
         </div>
@@ -76,12 +80,26 @@
 {% block scripts %}
 {% if current_user.is_authenticated and current_user.id == ds.user_id %}
 <script>
-const OWL_EXTS = ['.owl', '.rdf'];
+const OWL_EXTS     = ['.owl', '.rdf'];
+const ARCHIVE_EXTS = ['.gz', '.bz2'];
+
+// "ontology.owl.gz" is still OWL, and the job runner does reason over archive
+// members. Looking only at the final extension hid this panel for every
+// compressed ontology. .zip and .tgz can hold anything, so they are not guessed.
+function rdfExtension(name) {
+  let n = name.toLowerCase();
+  let ext = n.slice(n.lastIndexOf('.'));
+  if (ARCHIVE_EXTS.includes(ext)) {
+    n = n.slice(0, n.lastIndexOf('.'));
+    ext = n.includes('.') ? n.slice(n.lastIndexOf('.')) : '';
+  }
+  return ext;
+}
 
 document.getElementById('rdfFile').addEventListener('change', function() {
   const name = this.files[0]?.name || '';
-  const ext  = name.slice(name.lastIndexOf('.')).toLowerCase();
-  document.getElementById('owlPanel').style.display = OWL_EXTS.includes(ext) ? '' : 'none';
+  document.getElementById('owlPanel').style.display =
+    OWL_EXTS.includes(rdfExtension(name)) ? '' : 'none';
 });
 
 document.getElementById('applyOwl').addEventListener('change', function() {

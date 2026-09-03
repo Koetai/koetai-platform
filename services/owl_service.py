@@ -80,6 +80,27 @@ def materialize_owlrl(rdf_file: Path, regime: str = "OWL_RL",
         return False, rdf_file, str(e)
 
 
+def is_rdfs_available() -> bool:
+    """Whether RDFS reasoning can run. OWL RL needs nothing external."""
+    return JENA_INFER.is_file()
+
+
+def materialize(rdf_file: Path, regime: str = "OWL_RL") -> tuple[bool, Path, str]:
+    """Materialize inferences under `regime`, dispatching to the right engine.
+
+    Two callers used this name and it did not exist: the Git-import path and the
+    archive-member path, both of which therefore failed with an AttributeError
+    the moment anyone asked for reasoning. RDFS goes through Jena, everything
+    else through owlrl, which is the split the upload path already made inline.
+    """
+    if regime == "RDFS":
+        if not is_rdfs_available():
+            return False, rdf_file, ("RDFS reasoning needs Apache Jena, which is not "
+                                     "installed on this server. Use OWL RL instead.")
+        return materialize_rdfs(rdf_file)
+    return materialize_owlrl(rdf_file, regime)
+
+
 def normalize_to_nt(rdf_file: Path) -> tuple[bool, Path, str]:
     """
     Use Jena riot to parse any RDF format and emit N-Triples.
