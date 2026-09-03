@@ -51,6 +51,35 @@
 
 {{ ds_nav(ds, 'overview') }}
 
+{# Shown only after a delete was refused because the store could not be reached.
+   The second step is deliberate: it destroys the record of where the data is,
+   so it should not be reachable by mis-clicking the ordinary delete button. #}
+{% if request.args.get('undeletable') and current_user.is_authenticated and current_user.id == ds.user_id %}
+<div class="alert alert-warning">
+  <p class="mb-2">
+    <i class="bi bi-exclamation-triangle"></i>
+    <strong>This dataset could not be deleted</strong> because its triplestore
+    ({{ ds.platform }}) did not respond. If the store is only temporarily down,
+    wait and delete again — that removes the data properly.
+  </p>
+  <p class="mb-2 small">
+    If the store is gone for good, you can delete the dataset anyway. Any triples
+    it holds will stay in that store, and this page is the only record of where
+    they are:
+    {% for sfx in ['/data', '/examples', '/shapes'] %}<code>{{ ds.graph_base }}{{ sfx }}</code>{% if not loop.last %}, {% endif %}{% endfor %}
+  </p>
+  <form method="post" action="{{ url_for('datasets.delete', owner_orcid=ds.orcid_id, slug=ds.slug) }}"
+        onsubmit="return confirm('Delete this dataset, leaving its data in the triplestore?')">
+    <input type="hidden" name="force" value="1">
+    <button class="btn btn-sm btn-danger">
+      <i class="bi bi-trash"></i> Delete anyway, leaving the data behind
+    </button>
+  </form>
+</div>
+{% endif %}
+
+
+
 <!-- Quick-start nudge when dataset is empty (not for federation — it has no store to fill) -->
 {% if ds.platform != 'comunica' and triple_count == 0 and current_user.is_authenticated and current_user.id == ds.user_id %}
 <div class="alert alert-info d-flex gap-3 align-items-start">

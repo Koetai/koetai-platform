@@ -335,24 +335,36 @@ def delete(owner_orcid, slug):
     # Drop the data before the row that records where it lives. A failure here
     # used to be discarded, so a dataset whose backend was slow or down lost its
     # row and kept its triples — orphaned in the store with nothing left naming
-    # them. Stop instead, and let the user retry once the store is reachable.
+    # them. Stop instead, unless the user has explicitly chosen to go ahead:
+    # a store that is briefly down should be waited for, but one that has been
+    # retired for good would otherwise make its datasets undeletable.
+    force = request.form.get("force") == "1"
     ts = triplestore.get(ds)
     failed = []
     for suffix in triplestore.GRAPH_SUFFIXES:
         ok, msg = ts.drop_graph(ds["graph_base"] + suffix)
         if not ok:
             failed.append(f"{ds['graph_base']}{suffix}: {msg}")
-    if failed:
+
+    if failed and not force:
         flash("Could not remove this dataset's data from the triplestore, so "
-              "nothing was deleted — try again once the store is reachable. "
-              + "; ".join(failed)[:500], "error")
-        return redirect(url_for("datasets.view",
-                                owner_orcid=owner_orcid, slug=slug))
+              "nothing was deleted. " + "; ".join(failed)[:400], "error")
+        return redirect(url_for("datasets.view", owner_orcid=owner_orcid,
+                                slug=slug, undeletable=1))
 
     _remove_upload_dir(ds)
 
     db = get_db()
     db.execute("DELETE FROM datasets WHERE id = ?", (ds["id"],))
     db.commit()
-    flash(f"Dataset '{ds['label']}' deleted.", "success")
+    if failed:
+        # Deleted on the user's say-so with the data still in the store. Name the
+        # graphs: this row was the only record of where they are.
+        flash(f"Dataset '{ds['label']}' deleted, but its data could not be "
+              f"removed from the triplestore and is still there. Clean up by "
+              f"hand if the store comes back: "
+              + ", ".join(ds["graph_base"] + sfx for sfx in triplestore.GRAPH_SUFFIXES),
+              "warning")
+    else:
+        flash(f"Dataset '{ds['label']}' deleted.", "success")
     return redirect(url_for("dashboard.index"))
