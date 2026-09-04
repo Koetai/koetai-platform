@@ -13,6 +13,7 @@ so a request cannot name a different container, image or volume. See
 deploy/loader-agent/agent.sh, which is short enough to read in one go.
 """
 import json
+import os
 import time
 import uuid
 from pathlib import Path
@@ -26,6 +27,11 @@ HEARTBEAT = RESULT_DIR / ".agent-alive"
 # Formats the store's loader will take. Turtle is included because the loader
 # parses it itself — unlike our own batching, which cannot split it.
 FORMATS = {".nt": "nt", ".nq": "nq", ".ttl": "ttl"}
+
+# The agent is wired to one store's container and volume, so it serves datasets
+# on that backend and no other. Offering it elsewhere would load the triples
+# into the wrong store under the right graph URI, which is worse than refusing.
+STORE_PLATFORM = os.environ.get("BULK_LOADER_PLATFORM", "oxigraph")
 
 
 def is_available(max_age_s: int = 30) -> bool:
@@ -58,7 +64,7 @@ def rdf_format(path: Path) -> str | None:
     return None
 
 
-def submit(file_path: Path, graph_uri: str) -> tuple[bool, str]:
+def submit(file_path: Path, graph_uri: str, optimise: bool = False) -> tuple[bool, str]:
     """Queue a bulk load. Returns (ok, request_id_or_error)."""
     if not is_available():
         return False, "The bulk loader is not running."
@@ -68,7 +74,8 @@ def submit(file_path: Path, graph_uri: str) -> tuple[bool, str]:
                        "optionally gzipped or bzip2ed; this file is none of those.")
     request_id = uuid.uuid4().hex
     REQUEST_DIR.mkdir(parents=True, exist_ok=True)
-    payload = {"id": request_id, "file": str(file_path), "graph": graph_uri, "format": fmt}
+    payload = {"id": request_id, "file": str(file_path), "graph": graph_uri,
+               "format": fmt, "optimise": bool(optimise)}
     # Write beside the target and rename, so the agent never reads a half-written
     # request — it polls the directory and would otherwise catch one mid-write.
     tmp = REQUEST_DIR / f".{request_id}.tmp"

@@ -122,16 +122,18 @@ def upload_page(owner_orcid, slug):
     if _is_federation(ds):
         flash("Federation datasets query external sources and cannot be uploaded to.", "info")
         return redirect(url_for("datasets.view", owner_orcid=owner_orcid, slug=slug))
-        # RDFS reasoning shells out to Jena; OWL RL is a Python package and always
-        # available. The page needs to know so it does not offer the one that is not.
-        from services import jena_service
-        return render_template("upload.html", ds=ds,
-                               jena_available=jena_service.is_available(),
-                               max_upload_mb=config.MAX_UPLOAD_MB,
-                               # Offered only when an agent is actually running, and
-                               # only to an admin: a fast load stops the store.
-                               bulk_loader=(bulk_loader.is_available()
-                                            and current_user.is_admin))
+    # RDFS reasoning shells out to Jena; OWL RL is a Python package and always
+    # available. The page needs to know so it does not offer the one that is not.
+    from services import jena_service
+    return render_template("upload.html", ds=ds,
+                           jena_available=jena_service.is_available(),
+                           max_upload_mb=config.MAX_UPLOAD_MB,
+                           # Offered only when an agent is actually running, only
+                           # to an admin, and only for the store the agent loads:
+                           # a fast load stops that store.
+                           bulk_loader=(bulk_loader.is_available()
+                                        and current_user.is_admin
+                                        and ds["platform"] == bulk_loader.STORE_PLATFORM))
 
 
 @bp.route("/<owner_orcid>/<slug>/mapping", methods=["GET"])
@@ -313,6 +315,13 @@ def bulk_load(owner_orcid, slug):
                                  "goes offline while it runs. Only an admin can start one."}), 403
     if not bulk_loader.is_available():
         return jsonify({"error": "The bulk loader is not running on this server."}), 501
+    # The agent is configured with one store's container and volume. Loading a
+    # Fuseki dataset through it would write the triples into Oxigraph under that
+    # dataset's graph URI — the wrong store, and invisible to the dataset that
+    # asked for them.
+    if ds["platform"] != bulk_loader.STORE_PLATFORM:
+        return jsonify({"error": f"The bulk loader serves {bulk_loader.STORE_PLATFORM} "
+                                 f"datasets; this one is on {ds['platform']}."}), 400
 
     f = request.files.get("rdf_file")
     if not f:
@@ -326,7 +335,8 @@ def bulk_load(owner_orcid, slug):
     file_path = upload_dir / f"{uuid.uuid4().hex}_{secure_filename(f.filename)}"
     f.save(str(file_path))
 
-    ok, result = bulk_loader.submit(file_path, ds["graph_base"] + "/data")
+    optimise = request.form.get("optimise") == "true"
+    ok, result = bulk_loader.submit(file_path, ds["graph_base"] + "/data", optimise=optimise)
     if not ok:
         file_path.unlink(missing_ok=True)
         return jsonify({"error": result}), 500

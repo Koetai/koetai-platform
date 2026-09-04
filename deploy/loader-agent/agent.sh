@@ -53,6 +53,7 @@ process() {
   file="$(jq -r '.file // empty' "$req")"
   graph="$(jq -r '.graph // empty' "$req")"
   format="$(jq -r '.format // "nt"' "$req")"
+  optimise="$(jq -r '.optimise // false' "$req")"
   rm -f "$req"
 
   printf '{"id":"%s","status":"running","message":"starting","started":"%s"}\n' \
@@ -93,6 +94,20 @@ process() {
   esac
   status=$?
   set -e
+
+  # Compact while the store is already down, if asked. The loader writes a
+  # layout that is quick to write and slower to read, and says so when it
+  # finishes; doing it here spends one outage rather than two. Only after a
+  # load that worked — there is no point compacting a failed import — and a
+  # failure to compact does not fail the load, which has already succeeded.
+  if [ "$status" -eq 0 ] && [ "$optimise" = "true" ]; then
+    echo "loader-agent: $id optimising the store"
+    printf '{"id":"%s","status":"running","message":"optimising the store","started":"%s"}\n' \
+      "$id" "$started" > "$RES_DIR/$id.json"
+    docker run --rm -v "$STORE_VOLUME":/store --entrypoint /usr/local/bin/oxigraph \
+      "$STORE_IMAGE" optimize --location /store >>"$RES_DIR/$id.log" 2>&1 \
+      || echo "loader-agent: $id optimise failed (the load itself was fine)"
+  fi
 
   # Always bring the store back, whether or not the load worked: leaving every
   # dataset offline because one import failed would be the worse outcome.

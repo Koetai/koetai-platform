@@ -84,6 +84,12 @@
         <button type="button" class="btn btn-outline-danger" id="fastBtn">
           <i class="bi bi-lightning-charge"></i> Fast load (stops the store)
         </button>
+        <div class="form-check ms-1">
+          <input class="form-check-input" type="checkbox" id="optimiseAfter">
+          <label class="form-check-label small text-muted" for="optimiseAfter">
+            Optimise afterwards
+          </label>
+        </div>
         {% endif %}
       </div>
     </form>
@@ -95,6 +101,11 @@
       <strong>stopped while it runs</strong>, so every dataset on this server is offline until
       it finishes, and the data is appended rather than replacing what is there.
       Reads <code>.nt</code>, <code>.nq</code> and <code>.ttl</code>, optionally <code>.gz</code> or <code>.bz2</code>.
+      <br><strong>Optimise afterwards</strong> compacts the store while it is already stopped —
+      the loader writes a layout that is quick to write and slower to read, and recommends this
+      when it finishes. It lengthens the outage considerably — about seven minutes on a store
+      holding a hundred million triples, against seconds for the load itself — so it is
+      off by default. Doing it here at least spends one outage rather than two.
     </div>
     {% endif %}
     <div id="uploadStatus" class="mt-3"></div>
@@ -175,6 +186,7 @@ document.getElementById('fastBtn').addEventListener('click', async () => {
   btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Uploading…';
   const fd = new FormData();
   fd.append('rdf_file', file);
+  fd.append('optimise', document.getElementById('optimiseAfter').checked ? 'true' : 'false');
 
   try {
     const r = await fetch('{{ url_for("datasets.bulk_load", owner_orcid=ds.orcid_id, slug=ds.slug) }}',
@@ -221,7 +233,7 @@ function pollFastLoad(id, btn, status) {
       // queued or running: the store is down, so say so rather than leave a spinner
       status.innerHTML = '<div class="alert alert-warning mb-0">' +
         '<span class="spinner-border spinner-border-sm"></span> ' +
-        (d.status === 'queued' ? 'Queued for the loader…' : 'Loading — the triplestore is stopped.') +
+        (d.status === 'queued' ? 'Queued for the loader…' : (d.message === 'optimising the store' ? 'Optimising the store…' : 'Loading — the triplestore is stopped.')) +
         '</div>';
       setTimeout(tick, 3000);
     } catch (e) {
