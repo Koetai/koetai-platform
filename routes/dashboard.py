@@ -8,7 +8,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required, current_user
 import config
 from services.db import get_db
-from services import triplestore
+from services import capacity, triplestore
 
 _COSTS_FILE = Path(__file__).parent.parent / "costs_config.json"
 _CLAUDE_EUR  = {'Pro': 18, 'Max 5×': 91, 'Max 20×': 183, 'API': 0}
@@ -223,6 +223,7 @@ def admin_storage():
 
     db = get_db()
     users = db.execute("SELECT * FROM users ORDER BY created_at").fetchall()
+    cap = capacity.snapshot()
 
     rows = []
     total_bytes = 0
@@ -269,7 +270,7 @@ def admin_storage():
     disk_pct      = int(disk.used / disk.total * 100)
 
     return render_template("admin_storage.html",
-        rows=rows, total_gb=total_gb,
+        rows=rows, total_gb=total_gb, cap=cap,
         disk_total_gb=disk_total_gb, disk_used_gb=disk_used_gb, disk_pct=disk_pct)
 
 
