@@ -132,3 +132,10 @@ MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "500"))
 # half a gigabyte. An hour is generous rather than tight; a job that hits it is
 # stuck, not slow.
 RDF_LOAD_TIMEOUT = int(os.environ.get("RDF_LOAD_TIMEOUT", "3600"))
+# Line-based RDF (N-Triples, N-Quads) is sent to the store in batches of this
+# many lines rather than as one request. A Graph Store Protocol write is one
+# transaction, and the store holds it in memory until it commits: an unchunked
+# 9M-triple load was measured at 12.7 GB resident, and two real imports were
+# killed by the kernel OOM killer at ~10 GB. Batching bounds that to roughly the
+# size of one batch, at the cost of the load no longer being atomic.
+RDF_LOAD_BATCH_LINES = int(os.environ.get("RDF_LOAD_BATCH_LINES", "200000"))

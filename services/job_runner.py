@@ -224,10 +224,16 @@ def _process(job: dict):
 
         # replace_graph is a single atomic PUT on backends with a Graph Store
         # Protocol; on QLever it degrades to drop-then-load, as before.
+        # Report as it goes. A line-based load is sent in batches, so the count
+        # is real progress rather than a guess, and a large import stops looking
+        # like a hang.
+        def report(n):
+            _set("running", "loading", f"Loaded {n:,} statements so far…")
+
         if replace:
-            ok, msg = ts.replace_graph(graph_uri, load_path)
+            ok, msg = ts.replace_graph(graph_uri, load_path, progress=report)
         else:
-            ok, msg = ts.load_rdf_file(graph_uri, load_path)
+            ok, msg = ts.load_rdf_file(graph_uri, load_path, progress=report)
 
         # Clean up temp file if different from original
         if load_path != file_path:

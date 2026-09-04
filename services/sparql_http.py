@@ -150,16 +150,25 @@ class SparqlHttpStore:
         except Exception as e:
             return False, str(e)
 
-    def load_rdf_file(self, graph_uri: str, file_path: Path, **kw) -> tuple[bool, str]:
+    def load_rdf_file(self, graph_uri: str, file_path: Path, progress=None, **kw) -> tuple[bool, str]:
         """Append a file into a named graph (Graph Store Protocol POST)."""
-        return self._gsp_write(requests.post, graph_uri, file_path, "Loaded into")
+        return self._gsp_write(requests.post, graph_uri, file_path, "Loaded into", progress)
 
-    def replace_graph(self, graph_uri: str, file_path: Path, **kw) -> tuple[bool, str]:
+    def replace_graph(self, graph_uri: str, file_path: Path, progress=None, **kw) -> tuple[bool, str]:
         """Replace a named graph atomically (Graph Store Protocol PUT)."""
-        return self._gsp_write(requests.put, graph_uri, file_path, "Replaced")
+        return self._gsp_write(requests.put, graph_uri, file_path, "Replaced", progress)
 
-    def _gsp_write(self, method, graph_uri: str, file_path: Path, verb: str) -> tuple[bool, str]:
+    # Formats where one line is one statement, so the file can be split without
+    # parsing it. Turtle and RDF/XML cannot: prefixes and nesting carry across
+    # lines, and half a Turtle file is not Turtle.
+    LINE_BASED = {".nt", ".nq"}
+
+    def _gsp_write(self, method, graph_uri: str, file_path: Path, verb: str,
+                   progress=None) -> tuple[bool, str]:
         file_path = Path(file_path)
+        if (file_path.suffix.lower() in self.LINE_BASED
+                and config.RDF_LOAD_BATCH_LINES > 0):
+            return self._gsp_write_batched(method, graph_uri, file_path, verb, progress)
         try:
             with open(file_path, "rb") as f:
                 r = method(
@@ -175,6 +184,68 @@ class SparqlHttpStore:
             return False, r.text
         except Exception as e:
             return False, str(e)
+
+    def _gsp_write_batched(self, method, graph_uri: str, file_path: Path, verb: str,
+                           progress=None) -> tuple[bool, str]:
+        """Send a line-based file to the store in batches.
+
+        One Graph Store Protocol write is one transaction, which the store keeps
+        in memory until it commits, so the peak cost of a load scales with the
+        file rather than with anything bounded. That is what killed two real
+        imports here: the kernel's OOM killer took Oxigraph at ~10 GB, and the
+        app saw only "Remote end closed connection without response".
+
+        Batching trades atomicity for a bounded footprint. A failure part-way
+        therefore leaves the graph partly written, which the caller is told
+        about — silently keeping half a dataset would be worse than saying so.
+        """
+        total = 0
+        batch, batch_lines = [], 0
+        ctype = rdf_content_type(file_path.suffix)
+        first = True
+
+        def send(lines):
+            nonlocal first
+            body = b"".join(lines)
+            # Only the first batch may replace; the rest must append, or each
+            # batch would wipe the one before it.
+            verb_fn = method if first else requests.post
+            r = verb_fn(
+                self._url(self.gsp_path),
+                params={self.gsp_param: graph_uri},
+                data=body,
+                headers={"Content-Type": ctype},
+                auth=self.auth,
+                timeout=self.load_timeout,
+            )
+            first = False
+            if r.status_code >= 400:
+                raise RuntimeError(f"HTTP {r.status_code}: {r.text[:200]}")
+
+        try:
+            with open(file_path, "rb") as f:
+                for line in f:
+                    if not line.strip():
+                        continue
+                    batch.append(line)
+                    batch_lines += 1
+                    if batch_lines >= config.RDF_LOAD_BATCH_LINES:
+                        send(batch)
+                        total += batch_lines
+                        if progress:
+                            progress(total)
+                        batch, batch_lines = [], 0
+                if batch:
+                    send(batch)
+                    total += batch_lines
+                    if progress:
+                        progress(total)
+        except Exception as e:
+            if total:
+                return False, (f"{e} — after {total:,} statements. The graph now holds "
+                               f"a partial load; replace it rather than appending again.")
+            return False, str(e)
+        return True, f"{verb} <{graph_uri}> ({total:,} statements)"
 
     def drop_graph(self, graph_uri: str, **kw) -> tuple[bool, str]:
         try:
