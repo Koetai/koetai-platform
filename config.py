@@ -138,4 +138,19 @@ RDF_LOAD_TIMEOUT = int(os.environ.get("RDF_LOAD_TIMEOUT", "3600"))
 # 9M-triple load was measured at 12.7 GB resident, and two real imports were
 # killed by the kernel OOM killer at ~10 GB. Batching bounds that to roughly the
 # size of one batch, at the cost of the load no longer being atomic.
+#
+# 200,000 is measured, not guessed. Loading 2.4M triples into an empty Oxigraph,
+# varying only this:
+#
+#     50,000    56.5s   42k/s   1652 MiB peak
+#    200,000    38.6s   62k/s   1657 MiB
+#    500,000    36.7s   65k/s   1907 MiB
+#  1,000,000    45.0s   53k/s   2084 MiB
+#  2,000,000    44.0s   55k/s   2665 MiB
+#
+# Bigger is not better past ~500k: throughput falls again while memory keeps
+# climbing, so the largest batches are worse on both counts. 500k buys about 5%
+# for 15% more memory, which is the wrong trade when memory is what kills a
+# large load. Throughput against a store that already holds a hundred million
+# triples is roughly half these figures — the shape holds, the numbers do not.
 RDF_LOAD_BATCH_LINES = int(os.environ.get("RDF_LOAD_BATCH_LINES", "200000"))
