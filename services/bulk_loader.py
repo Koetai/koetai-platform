@@ -41,10 +41,17 @@ def is_available(max_age_s: int = 30) -> bool:
 
 
 def rdf_format(path: Path) -> str | None:
-    """The loader's format name for a file, seeing through one .gz."""
+    """The loader's format name for a file, seeing through one compression layer.
+
+    Only .gz and .bz2, because the agent streams those straight into the loader.
+    A .zip or .tgz would have to be unpacked to disk first, which for the files
+    this path exists for means writing out another several gigabytes.
+    """
     name = Path(path).name.lower()
-    if name.endswith(".gz"):
-        name = name[:-3]
+    for suffix in (".gz", ".bz2"):
+        if name.endswith(suffix):
+            name = name[: -len(suffix)]
+            break
     for suffix, fmt in FORMATS.items():
         if name.endswith(suffix):
             return fmt
@@ -57,8 +64,8 @@ def submit(file_path: Path, graph_uri: str) -> tuple[bool, str]:
         return False, "The bulk loader is not running."
     fmt = rdf_format(file_path)
     if not fmt:
-        return False, ("The bulk loader reads N-Triples, N-Quads and Turtle "
-                       "(optionally gzipped); this file is neither.")
+        return False, ("The bulk loader reads N-Triples, N-Quads and Turtle, "
+                       "optionally gzipped or bzip2ed; this file is none of those.")
     request_id = uuid.uuid4().hex
     REQUEST_DIR.mkdir(parents=True, exist_ok=True)
     payload = {"id": request_id, "file": str(file_path), "graph": graph_uri, "format": fmt}

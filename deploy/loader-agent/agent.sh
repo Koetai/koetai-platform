@@ -83,6 +83,9 @@ process() {
     *.gz)  gzip -dc "$real" | docker run --rm -i -v "$STORE_VOLUME":/store \
              --entrypoint /usr/local/bin/oxigraph "$STORE_IMAGE" \
              load --location /store --format "$format" --graph "$graph" 2>"$RES_DIR/$id.log" ;;
+    *.bz2) bzip2 -dc "$real" | docker run --rm -i -v "$STORE_VOLUME":/store \
+             --entrypoint /usr/local/bin/oxigraph "$STORE_IMAGE" \
+             load --location /store --format "$format" --graph "$graph" 2>"$RES_DIR/$id.log" ;;
     *)     docker run --rm -i -v "$STORE_VOLUME":/store \
              --entrypoint /usr/local/bin/oxigraph "$STORE_IMAGE" \
              load --location /store --format "$format" --graph "$graph" \

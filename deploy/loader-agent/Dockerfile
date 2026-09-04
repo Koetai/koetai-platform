@@ -5,7 +5,7 @@
 # before you decide to run it — see agent.sh for what it will and will not do.
 FROM docker:cli
 
-RUN apk add --no-cache jq coreutils
+RUN apk add --no-cache jq coreutils bzip2
 
 COPY agent.sh /usr/local/bin/agent.sh
 RUN chmod +x /usr/local/bin/agent.sh

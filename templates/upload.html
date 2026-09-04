@@ -94,7 +94,7 @@
       sending it over HTTP — roughly seventeen times quicker on a large file. The store is
       <strong>stopped while it runs</strong>, so every dataset on this server is offline until
       it finishes, and the data is appended rather than replacing what is there.
-      Reads <code>.nt</code>, <code>.nq</code> and <code>.ttl</code>, gzipped or not.
+      Reads <code>.nt</code>, <code>.nq</code> and <code>.ttl</code>, optionally <code>.gz</code> or <code>.bz2</code>.
     </div>
     {% endif %}
     <div id="uploadStatus" class="mt-3"></div>
@@ -149,10 +149,23 @@ document.getElementById('fastBtn').addEventListener('click', async () => {
   const file   = document.getElementById('rdfFile').files[0];
   if (!file) { status.innerHTML = '<div class="alert alert-warning">Choose a file first.</div>'; return; }
 
-  const okExt = /\.(nt|nq|ttl)(\.gz)?$/i.test(file.name);
+  // Same pre-check as the ordinary upload: the file still goes through Flask,
+  // so the cap applies, and finding that out after transferring a gigabyte is
+  // exactly the wait this button exists to avoid.
+  const MAX_FAST_BYTES = {{ max_upload_mb }} * 1024 * 1024;
+  if (file.size > MAX_FAST_BYTES) {
+    status.innerHTML = '<div class="alert alert-danger">' +
+      '<strong>That file is too large to upload.</strong> <code>' + file.name + '</code> is ' +
+      (file.size / 1024 / 1024).toFixed(0) + ' MB; the limit is {{ max_upload_mb }} MB. ' +
+      'A fast load still uploads the file the ordinary way — it only changes how the ' +
+      'triplestore ingests it afterwards.</div>';
+    return;
+  }
+
+  const okExt = /\.(nt|nq|ttl)(\.gz|\.bz2)?$/i.test(file.name);
   if (!okExt) {
     status.innerHTML = '<div class="alert alert-danger">The bulk loader reads ' +
-      '<code>.nt</code>, <code>.nq</code> and <code>.ttl</code>, gzipped or not.</div>';
+      '<code>.nt</code>, <code>.nq</code> and <code>.ttl</code>, optionally gzipped or bzip2ed.</div>';
     return;
   }
   if (!confirm('This stops the triplestore while it loads, taking every dataset on this ' +
