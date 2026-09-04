@@ -105,6 +105,40 @@ services:
       - koetai
 
   # ───────────────────────────────────────────────────────────────────────────
+  # Loader agent — optional, and the only container here with Docker access.
+  #
+  # It exists so a bulk load can be started from the web UI. The store's own
+  # loader is ~17x faster than loading over HTTP, but it needs the store stopped,
+  # and something has to do the stopping. Giving that job to the app would mean
+  # giving the app the Docker socket, which is root on the host; giving it to a
+  # container that only knows how to stop one store, run one image and load one
+  # file is a much smaller thing. Read deploy/loader-agent/agent.sh before
+  # enabling it — it is short on purpose.
+  #
+  #   docker compose --profile fastload up -d
+  #
+  # Without this profile the app simply does not offer a fast load.
+  # ───────────────────────────────────────────────────────────────────────────
+  loader:
+    build: ./deploy/loader-agent
+    restart: unless-stopped
+    profiles: ["fastload"]
+    environment:
+      - STORE_CONTAINER=${STORE_CONTAINER:-koetai-platform-oxigraph-1}
+      - STORE_VOLUME=${STORE_VOLUME:-koetai-platform_oxigraph-data}
+      - STORE_IMAGE=${STORE_IMAGE:-ghcr.io/oxigraph/oxigraph:latest}
+      - ALLOWED_ROOT=/data/uploads
+      - REQ_DIR=/data/bulk-loader/requests
+      - RES_DIR=/data/bulk-loader/results
+    volumes:
+      # The app's volume: the files to load, and the request exchange.
+      - koetai-data:/data
+      # The capability. Everything above exists to keep this out of the app.
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - koetai
+
+  # ───────────────────────────────────────────────────────────────────────────
   # Virtuoso. Writes go to its -auth endpoints, hence VIRTUOSO_USER/PASSWORD.
   # ───────────────────────────────────────────────────────────────────────────
   virtuoso:
