@@ -10,7 +10,7 @@ from werkzeug.utils import secure_filename
 from flask_login import login_required, current_user
 import config
 from services.db import get_db
-from services import triplestore, owl_service, job_runner, sparql_http
+from services import bulk_loader, triplestore, owl_service, job_runner, sparql_http
 
 
 def _schema_from_file(path: Path):
@@ -122,12 +122,16 @@ def upload_page(owner_orcid, slug):
     if _is_federation(ds):
         flash("Federation datasets query external sources and cannot be uploaded to.", "info")
         return redirect(url_for("datasets.view", owner_orcid=owner_orcid, slug=slug))
-    # RDFS reasoning shells out to Jena; OWL RL is a Python package and always
-    # available. The page needs to know so it does not offer the one that is not.
-    from services import jena_service
-    return render_template("upload.html", ds=ds,
-                           jena_available=jena_service.is_available(),
-                           max_upload_mb=config.MAX_UPLOAD_MB)
+        # RDFS reasoning shells out to Jena; OWL RL is a Python package and always
+        # available. The page needs to know so it does not offer the one that is not.
+        from services import jena_service
+        return render_template("upload.html", ds=ds,
+                               jena_available=jena_service.is_available(),
+                               max_upload_mb=config.MAX_UPLOAD_MB,
+                               # Offered only when an agent is actually running, and
+                               # only to an admin: a fast load stops the store.
+                               bulk_loader=(bulk_loader.is_available()
+                                            and current_user.is_admin))
 
 
 @bp.route("/<owner_orcid>/<slug>/mapping", methods=["GET"])
@@ -288,6 +292,57 @@ def upload(owner_orcid, slug):
         replace_data=replace_data,
     )
     return jsonify({"job_id": job_id, "graph": graph_uri})
+
+
+@bp.route("/<owner_orcid>/<slug>/bulk-load", methods=["POST"])
+@login_required
+def bulk_load(owner_orcid, slug):
+    """Hand an already-uploaded file to the loader agent.
+
+    Admin-only, because the store is stopped for the duration and every
+    dataset's endpoint goes down with it — that is a decision about the
+    platform, not about one dataset. Note this is not the security boundary:
+    an attacker running code in this app would not come through here at all.
+    What bounds the agent is the agent (deploy/loader-agent/agent.sh).
+    """
+    ds = _get_dataset_or_404(owner_orcid, slug)
+    if not ds or ds["user_id"] != current_user.id:
+        return jsonify({"error": "Not found or not authorized"}), 403
+    if not current_user.is_admin:
+        return jsonify({"error": "A fast load stops the triplestore, so every dataset "
+                                 "goes offline while it runs. Only an admin can start one."}), 403
+    if not bulk_loader.is_available():
+        return jsonify({"error": "The bulk loader is not running on this server."}), 501
+
+    f = request.files.get("rdf_file")
+    if not f:
+        return jsonify({"error": "No file provided"}), 400
+    if not bulk_loader.rdf_format(f.filename):
+        return jsonify({"error": "The bulk loader reads .nt, .nq and .ttl, "
+                                 "optionally gzipped."}), 400
+
+    upload_dir = config.UPLOAD_DIR / str(current_user.id) / slug
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    file_path = upload_dir / f"{uuid.uuid4().hex}_{secure_filename(f.filename)}"
+    f.save(str(file_path))
+
+    ok, result = bulk_loader.submit(file_path, ds["graph_base"] + "/data")
+    if not ok:
+        file_path.unlink(missing_ok=True)
+        return jsonify({"error": result}), 500
+    return jsonify({"request_id": result})
+
+
+@bp.route("/<owner_orcid>/<slug>/bulk-load/status/<request_id>")
+@login_required
+def bulk_load_status(owner_orcid, slug, request_id):
+    ds = _get_dataset_or_404(owner_orcid, slug)
+    if not ds or ds["user_id"] != current_user.id or not current_user.is_admin:
+        return jsonify({"error": "Not authorized"}), 403
+    st = bulk_loader.status(request_id)
+    if st is None:
+        return jsonify({"status": "queued"})
+    return jsonify(st)
 
 
 @bp.route("/<owner_orcid>/<slug>/upload/status/<job_id>")

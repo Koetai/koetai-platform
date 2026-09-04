@@ -73,10 +73,30 @@
         </div>
       </div>
 
-      <button type="submit" class="btn btn-primary" id="uploadBtn">
-        <i class="bi bi-upload"></i> Upload &amp; Index
-      </button>
+      <div class="d-flex gap-2 align-items-center flex-wrap">
+        <button type="submit" class="btn btn-primary" id="uploadBtn">
+          <i class="bi bi-upload"></i> Upload &amp; Index
+        </button>
+        {% if bulk_loader %}
+        {# Offered only when a loader agent is running and you are an admin. It
+           stops the triplestore, so every dataset goes offline while it runs —
+           which is why it is not a per-dataset decision. #}
+        <button type="button" class="btn btn-outline-danger" id="fastBtn">
+          <i class="bi bi-lightning-charge"></i> Fast load (stops the store)
+        </button>
+        {% endif %}
+      </div>
     </form>
+    {% if bulk_loader %}
+    <div class="alert alert-secondary small mt-3 mb-0">
+      <i class="bi bi-lightning-charge"></i>
+      <strong>Fast load</strong> hands the file to the triplestore's own loader instead of
+      sending it over HTTP — roughly seventeen times quicker on a large file. The store is
+      <strong>stopped while it runs</strong>, so every dataset on this server is offline until
+      it finishes, and the data is appended rather than replacing what is there.
+      Reads <code>.nt</code>, <code>.nq</code> and <code>.ttl</code>, gzipped or not.
+    </div>
+    {% endif %}
     <div id="uploadStatus" class="mt-3"></div>
   </div>
 </div>
@@ -118,6 +138,90 @@ document.getElementById('owlRegime').addEventListener('change', function() {
   const warn = document.getElementById('owlWarn');
   warn.style.display = this.value.startsWith('OWL_RL') ? '' : 'none';
 });
+
+{% if bulk_loader %}
+// Fast load: upload the file, then let the loader agent import it with the
+// store's own loader. Separate from the ordinary submit path because it does
+// something materially different — it takes the store down for the duration.
+document.getElementById('fastBtn').addEventListener('click', async () => {
+  const btn    = document.getElementById('fastBtn');
+  const status = document.getElementById('uploadStatus');
+  const file   = document.getElementById('rdfFile').files[0];
+  if (!file) { status.innerHTML = '<div class="alert alert-warning">Choose a file first.</div>'; return; }
+
+  const okExt = /\.(nt|nq|ttl)(\.gz)?$/i.test(file.name);
+  if (!okExt) {
+    status.innerHTML = '<div class="alert alert-danger">The bulk loader reads ' +
+      '<code>.nt</code>, <code>.nq</code> and <code>.ttl</code>, gzipped or not.</div>';
+    return;
+  }
+  if (!confirm('This stops the triplestore while it loads, taking every dataset on this ' +
+               'server offline until it finishes. Continue?')) return;
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Uploading…';
+  const fd = new FormData();
+  fd.append('rdf_file', file);
+
+  try {
+    const r = await fetch('{{ url_for("datasets.bulk_load", owner_orcid=ds.orcid_id, slug=ds.slug) }}',
+      { method: 'POST', body: fd });
+    if (!r.ok) {
+      let msg = 'Fast load failed (HTTP ' + r.status + ').';
+      try { const e = await r.json(); if (e.error) msg = e.error; } catch (_) {}
+      status.innerHTML = '<div class="alert alert-danger">' + msg + '</div>';
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-lightning-charge"></i> Fast load (stops the store)';
+      return;
+    }
+    const d = await r.json();
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Loading…';
+    pollFastLoad(d.request_id, btn, status);
+  } catch (e) {
+    status.innerHTML = '<div class="alert alert-danger">Fast load error: ' + e + '</div>';
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-lightning-charge"></i> Fast load (stops the store)';
+  }
+});
+
+function pollFastLoad(id, btn, status) {
+  const reset = () => {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-lightning-charge"></i> Fast load (stops the store)';
+  };
+  const tick = async () => {
+    try {
+      const r = await fetch('{{ url_for("datasets.bulk_load_status", owner_orcid=ds.orcid_id, slug=ds.slug, request_id="__ID__") }}'.replace('__ID__', id));
+      const d = await r.json();
+      if (d.status === 'done') {
+        status.innerHTML = '<div class="alert alert-success"><strong>Loaded.</strong> ' +
+          'The store has been restarted.' +
+          (d.message ? '<pre class="mb-0 mt-2 small">' + escapeHtml(d.message) + '</pre>' : '') +
+          '</div>';
+        reset(); return;
+      }
+      if (d.status === 'error') {
+        status.innerHTML = '<div class="alert alert-danger"><strong>Fast load failed.</strong> ' +
+          escapeHtml(d.message || '') + '<br>The store has been restarted.</div>';
+        reset(); return;
+      }
+      // queued or running: the store is down, so say so rather than leave a spinner
+      status.innerHTML = '<div class="alert alert-warning mb-0">' +
+        '<span class="spinner-border spinner-border-sm"></span> ' +
+        (d.status === 'queued' ? 'Queued for the loader…' : 'Loading — the triplestore is stopped.') +
+        '</div>';
+      setTimeout(tick, 3000);
+    } catch (e) {
+      setTimeout(tick, 5000);   // the store restarting can break a poll; keep trying
+    }
+  };
+  setTimeout(tick, 1500);
+}
+
+function escapeHtml(t) {
+  return String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+{% endif %}
 
 const POLL_INTERVAL = 3000; // ms
 let pollTimer = null;

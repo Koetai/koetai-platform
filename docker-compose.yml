@@ -40,6 +40,8 @@ services:
       # your own machine, so uploaded sources are dropped once loaded. The
       # hosted deployment keeps them (config.py default) for provenance.
       - KEEP_UPLOADED_SOURCES=${KEEP_UPLOADED_SOURCES:-false}
+      # Where the app leaves requests for the loader agent, if one is running.
+      - BULK_LOADER_DIR=/data/bulk-loader
       # Container service names, not localhost.
       - FUSEKI_BASE_URL=http://fuseki:3030
       - FUSEKI_DATASET=${FUSEKI_DATASET:-koetai}
