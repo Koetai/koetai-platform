@@ -21,12 +21,37 @@ def _ensure_shexer_compatible(rdf_file: Path) -> tuple[Path, bool]:
     if rdf_file.suffix.lower() in _SHEXER_NATIVE:
         return rdf_file, False
 
-    from services.owl_service import normalize_to_nt
+    from services.owl_service import normalize_to_nt, riot_available
+    if not riot_available():
+        # Nothing to convert with. Callers should have sampled the store
+        # instead of getting here; passing the file on anyway at least
+        # produces an error naming the real problem.
+        return rdf_file, False
     ok, nt_path, msg = normalize_to_nt(rdf_file)
     if ok:
         return nt_path, True
     # Fall back to original and let ShExer report the error
     return rdf_file, False
+
+
+def _readable_error(stderr: str, input_path: Path) -> str:
+    """Turn a subprocess traceback into one sentence.
+
+    ShExer runs out of process, so anything that goes wrong arrives as forty
+    lines of frames through lightrdf and shexer internals. The last line is the
+    part that says what happened; the rest belongs in the server log, not on a
+    page someone is trying to read.
+    """
+    lines = [l.strip() for l in (stderr or "").splitlines() if l.strip()]
+    if not lines:
+        return "Shape inference failed without reporting a reason."
+    last = lines[-1]
+    if "ParseError" in last or "lightrdf.Error" in last:
+        detail = last.split(": ", 1)[-1]
+        return (f"Could not parse {input_path.name} as RDF: {detail} "
+                "Shape inference reads Turtle and N-Triples; other formats need "
+                "Apache Jena installed to convert them first.")
+    return last
 
 
 def infer_shex(rdf_file: Path, graph_uri: str = None,
@@ -55,7 +80,7 @@ def infer_shex(rdf_file: Path, graph_uri: str = None,
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
         if r.returncode == 0:
             return True, r.stdout.strip()
-        return False, r.stderr.strip()
+        return False, _readable_error(r.stderr, input_path)
     except subprocess.TimeoutExpired:
         return False, "ShExer timed out"
     except Exception as e:

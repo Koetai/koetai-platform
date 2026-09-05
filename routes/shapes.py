@@ -8,7 +8,7 @@ import config
 import tempfile, shutil
 from services.db import get_db
 from services import triplestore
-from services import shexer_service, rudof_service, jena_service, rdfconfig_service
+from services import shexer_service, rudof_service, jena_service, rdfconfig_service, owl_service
 
 bp = Blueprint("shapes", __name__, url_prefix="/u")
 
@@ -69,24 +69,48 @@ def view(owner_orcid, slug):
     return render_template("shapes.html", ds=ds, shapes=shapes, tools=tools)
 
 
+# What the shape tools can parse for themselves. ShExer reads through lightrdf,
+# which handles these and nothing else; anything wider needs Jena's riot.
+_TOOL_READABLE = {".ttl", ".nt", ".n3"}
+
+
 def _rdf_source(ds, user_id, slug):
     """RDF to infer shapes from, or validate against.
 
-    Prefers the uploaded file when it is still there, because it is the whole
-    thing. Otherwise takes a sample from the store, which is where the data
-    actually lives — the upload is a transient copy, and telling someone with
-    millions of triples loaded that they have "no RDF data" because a temporary
-    file was tidied away is simply wrong.
+    Prefers the uploaded file when it is still there and the tools can read it,
+    because it is the whole dataset rather than a sample. Otherwise takes a
+    sample from the store, which is where the data actually lives — the upload
+    is a transient copy, and telling someone with millions of triples loaded
+    that they have "no RDF data" because a temporary file was tidied away is
+    simply wrong.
+
+    Readability is the second half of that test and it matters more than it
+    looks. Uploads may be any of eight formats; the tools read three of them.
+    The rest need riot, which is optional and normally absent. But the store has
+    already parsed the file — that is what loading it meant — so a sample comes
+    back as clean N-Triples whatever the source was. Handing ShExer an RDF/XML
+    file instead produced a lightrdf traceback complaining that
+    `?xml version="1.0"...` is not a valid IRI: perfectly true, and no help to
+    anyone.
 
     Returns (path, is_temp, note); path is None when there is really nothing.
     """
     f = _latest_rdf_file(user_id, slug)
-    if f:
+    if f and (f.suffix.lower() in _TOOL_READABLE or owl_service.riot_available()):
         return f, False, None
+
     path, n = triplestore.export_sample(ds)
     if not path:
-        return None, False, None
-    return path, True, f"Sampled {n:,} triples from the triplestore."
+        # Nothing in the store either. An unreadable upload still beats
+        # refusing to try, and the tool's own complaint is then the only
+        # information available.
+        return (f, False, None) if f else (None, False, None)
+
+    note = f"Sampled {n:,} triples from the triplestore."
+    if f:
+        note += (f" The uploaded {f.suffix.lstrip('.')} source cannot be read directly "
+                 "without Apache Jena, which is not installed here.")
+    return path, True, note
 
 
 @bp.route("/<owner_orcid>/<slug>/shapes/infer", methods=["POST"])
