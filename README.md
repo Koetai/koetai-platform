@@ -104,7 +104,7 @@ equally proven, so this table says plainly where each one stands:
 |---|---|---|
 | `fuseki` | **Tested, ships by default** | Apache Jena TDB2. Started by `docker compose up`. The safest choice. |
 | `oxigraph` | **Tested** | `docker compose --profile oxigraph up -d`. Smaller and lighter than Fuseki; needs 0.5.11 or later (see below). |
-| `qlever` | **Queries only** | Not started by compose — it serves an index built offline, so it needs its own setup. Uploading from Koetai does not work: the app sends no access token, which QLever requires for updates, and files over 50 MB take a rebuild path that assumes the app and QLever share a filesystem. |
+| `qlever` | **Queries only, by design** | Point it at an index you built yourself and it answers queries. Uploading through Koetai does not work and is not really fixable — see below. |
 | `virtuoso` | *Implemented, untested* | Reached over the same SPARQL 1.1 + Graph Store Protocol client as Fuseki and Oxigraph, and configurable in `.env`, but not exercised. |
 | `blazegraph` | *Implemented, untested* | As above. Uses `context-uri` rather than `graph` for the Graph Store parameter. |
 | `rdf4j` | *Implemented, untested* | As above. |
@@ -173,6 +173,36 @@ oxigraph optimize --location /data
 Those took a Fuseki volume from 6.8 GB to 201 MB and an Oxigraph one from 7.3 GB
 to 83 MB. On a local install `docker compose down -v` is the blunter equivalent,
 and destroys the data with it.
+
+### QLever is read-only here, and that is deliberate
+
+QLever runs perfectly well as another container — the image is multi-arch, so it
+is as happy on ARM as on x86. What does not work is *uploading* to it, and the
+reason is structural rather than a missing afternoon's work.
+
+Oxigraph and Fuseki accept data incrementally: a load adds one dataset's triples
+into its own named graph and leaves the rest alone. QLever does not work that
+way. It serves an index built offline by `qlever-index`, which takes a set of
+input files and produces an index — there is no append, merge or incremental
+mode. Per-file graphs are supported, so a multi-tenant layout is expressible,
+but only by naming every file in every build.
+
+So adding one dataset means rebuilding all of them. On a platform holding a few
+hundred million triples, a 50 MB upload would re-index the lot, take every
+dataset offline while it ran, and require that every source file ever uploaded
+be kept for ever — since the sources are the only thing the index can be rebuilt
+from. That is the opposite of what this platform does with uploads everywhere
+else.
+
+Two smaller things are also unfixed, and would need doing first even for the
+rebuild path: the app sends no access token, which QLever requires for every
+update, and the >50 MB path in `services/qlever.py` shells out to the `qlever`
+CLI assuming the app and the store share a filesystem, which is not true in a
+container split.
+
+The sensible use of QLever here is a **published** dataset rather than an
+editable one: build the index yourself, point `QLEVER_PLATFORM_URL` at the
+server, and query it. Uploads belong on Oxigraph or Fuseki.
 
 ### Federation datasets (Comunica)
 
