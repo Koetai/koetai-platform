@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}The Mangal{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-9">
+
+    <!-- Hero -->
+    <div class="mb-4">
+      <h2 class="mb-1"><i class="bi bi-water text-primary"></i> The Mangal</h2>
+      <p class="text-muted mb-2">The Koetai network — a directory of every running instance.</p>
+      <div class="alert alert-light border small mb-0">
+        A <strong>mangal</strong> is the whole ecosystem of many mangroves. Each
+        <strong>Koetai</strong> node watches its own RDF graphs — the mangroves —
+        from the waterline, like the <em>anableps</em> for which it is named.
+        This page is the ecosystem that ties those nodes together.
+        <span class="d-inline-block mt-1">
+          Machine-readable: <code>curl -H 'Accept: text/turtle' {{ mangal_url }}</code>
+          — a <code>dcat:Catalog</code> of the instances below.
+        </span>
+      </div>
+    </div>
+
+    <!-- Instances -->
+    <div class="card mb-4">
+      <div class="card-header fw-semibold">
+        <i class="bi bi-diagram-3 text-primary"></i> Instances
+        <span class="badge bg-secondary ms-1">{{ instances|length }}</span>
+      </div>
+      <div class="card-body p-0">
+        {% if instances %}
+        <ul class="list-group list-group-flush">
+          {% for i in instances %}
+          <li class="list-group-item">
+            <div class="d-flex align-items-start justify-content-between gap-3">
+              <div>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                  <a href="{{ i.url }}" target="_blank" rel="noopener"
+                     class="fw-semibold text-decoration-none fs-5">
+                    <i class="bi bi-hdd-network text-success"></i> {{ i.name }}
+                  </a>
+                  {% if i.canonical %}<span class="badge bg-primary">canonical</span>{% endif %}
+                </div>
+                <div class="small">
+                  <a href="{{ i.url }}" target="_blank" rel="noopener" class="text-muted">{{ i.url }}</a>
+                </div>
+                {% if i.description %}<p class="mb-1 mt-1 small">{{ i.description }}</p>{% endif %}
+                <div class="text-muted small">
+                  {% if i.operator %}
+                    <i class="bi bi-person"></i> {{ i.operator }}
+                    {% if i.orcid %}
+                      <a href="https://orcid.org/{{ i.orcid }}" target="_blank" rel="noopener"
+                         class="text-decoration-none">
+                        <img src="https://orcid.org/sites/default/files/images/orcid_16x16.png"
+                             width="14" style="vertical-align:-2px"> {{ i.orcid }}
+                      </a>
+                    {% endif %}
+                  {% endif %}
+                  {% if i.region %} · <i class="bi bi-geo-alt"></i> {{ i.region }}{% endif %}
+                  {% if i.since %} · <i class="bi bi-calendar3"></i> since {{ i.since }}{% endif %}
+                </div>
+              </div>
+              <a href="{{ i.url }}" target="_blank" rel="noopener"
+                 class="btn btn-sm btn-outline-primary flex-shrink-0">
+                Visit <i class="bi bi-box-arrow-up-right"></i>
+              </a>
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-muted p-3 mb-0">No instances registered yet.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Run your own -->
+    <div class="card mb-4">
+      <div class="card-header fw-semibold"><i class="bi bi-rocket-takeoff text-primary"></i> Run your own Koetai</div>
+      <div class="card-body">
+        <p class="small text-muted">
+          Koetai is open source. You bring a triplestore backend (QLever, Fuseki,
+          Oxigraph, or a Comunica federation) and Koetai gives it a FAIR front
+          door — ORCID sign-in, a SPARQL workbench, a FAIR Data Point and VoID
+          statistics.
+        </p>
+        <ol class="small mb-3">
+          <li>Clone the platform:
+            <br><code>git clone https://github.com/Koetai/koetai-platform.git</code></li>
+          <li>Configure a triplestore backend and your <code>BASE_URL</code> in <code>config.py</code> / environment.</li>
+          <li>Run it behind a reverse proxy on your own domain and load your datasets.</li>
+        </ol>
+        <a href="https://github.com/Koetai/koetai-platform" target="_blank" rel="noopener"
+           class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-github"></i> koetai-platform on GitHub
+        </a>
+        <a href="https://codeberg.org/andrawaag/koetai-platform" target="_blank" rel="noopener"
+           class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-git"></i> mirror on Codeberg
+        </a>
+      </div>
+    </div>
+
+    <!-- Get listed -->
+    <div class="card mb-4">
+      <div class="card-header fw-semibold"><i class="bi bi-signpost-2 text-primary"></i> Get listed in the Mangal</div>
+      <div class="card-body">
+        <p class="small mb-2">
+          Once your instance is online, add it to the registry with a pull request:
+        </p>
+        <ol class="small mb-3">
+          <li>Edit <code>mangal.yaml</code> in the
+            <a href="https://github.com/Koetai/koetai-platform/blob/main/mangal.yaml"
+               target="_blank" rel="noopener">koetai-platform</a> repository.</li>
+          <li>Add a block with your <code>name</code>, <code>url</code>,
+            <code>operator</code>, <code>orcid</code> and a short <code>description</code>.</li>
+          <li>Open the PR. Once merged, every node re-renders the list on its next
+            redeploy, so your instance appears across the whole network.</li>
+        </ol>
+        <a href="https://github.com/Koetai/koetai-platform/edit/main/mangal.yaml"
+           target="_blank" rel="noopener" class="btn btn-sm btn-primary">
+          <i class="bi bi-pencil-square"></i> Add your instance
+        </a>
+      </div>
+    </div>
+
+    <div class="text-muted small">
+      <hr>
+      The registry is served as RDF using DCAT
+      (<code>dcat:Catalog</code> / <code>dcat:DataService</code>) —
+      request <code>Accept: text/turtle</code> to harvest it.
+    </div>
+  </div>
+</div>
+{% endblock %}

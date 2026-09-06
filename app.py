@@ -4,7 +4,7 @@
 import os
 os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "0")  # enforce HTTPS in prod
 
-from flask import Flask, render_template, redirect, url_for
+from flask import Flask, render_template, redirect, url_for, request, Response
 from flask_login import LoginManager
 from flask_cors import CORS
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -96,6 +96,25 @@ def index():
 @app.route("/help")
 def helppage():
     return render_template("help.html")
+
+@app.route("/mangal")
+def mangal():
+    """The Mangal — directory of Koetai instances across the network.
+
+    Content-negotiated: `Accept: text/turtle` returns the registry as a
+    dcat:Catalog of dcat:DataService nodes; otherwise the HTML directory.
+    """
+    from services import mangal as mangal_svc
+    instances = mangal_svc.load_instances()
+    accept = request.headers.get("Accept", "")
+    if "text/turtle" in accept or "application/rdf+xml" in accept:
+        ttl = mangal_svc.to_turtle(instances)
+        r = Response(ttl, mimetype="text/turtle")
+        r.headers["Content-Disposition"] = "inline"
+        return r
+    return render_template("mangal.html",
+                           instances=instances,
+                           mangal_url=mangal_svc.MANGAL_URL)
 
 @app.route("/health")
 def health():

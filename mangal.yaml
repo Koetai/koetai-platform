@@ -1,0 +1,39 @@
+# The Mangal — registry of Koetai instances
+#
+# A *mangal* is the ecosystem of many mangroves; this file is the ecosystem
+# of many Koetai nodes. Each Koetai instance watches its own RDF graphs (the
+# mangroves) from the waterline, like the anableps for which it is named.
+#
+# ── To get your instance listed ──────────────────────────────────────────────
+# Open a pull request adding a block below. Keep the list alphabetical by name.
+# Required: name, url, operator, description. Optional: orcid, region, since.
+#   • url       — the base URL of your running Koetai (https://…, no trailing /)
+#   • operator  — the person or organisation running it
+#   • orcid     — operator ORCID iD (digits only, e.g. 0000-0002-1825-0097)
+#   • region    — rough location of the operator / host (free text)
+#   • since     — ISO date the instance came online (YYYY-MM-DD)
+# On the next redeploy every node re-renders this list, so all instances stay
+# in sync. The list is also served as RDF (Accept: text/turtle at /mangal).
+
+instances:
+  - name: Koetai
+    url: https://koetai.semscape.org
+    operator: Andra Waagmeester
+    orcid: 0000-0001-9773-4008
+    region: Netherlands
+    since: 2025-01-01
+    canonical: true
+    description: >-
+      The reference Koetai FAIR SPARQL platform. Hosts the Mangal registry and
+      several life-science datasets (Orphanet ORDO, AHRI) with a FAIR Data Point
+      and VoID statistics.
+
+  - name: Koetai @ bionames
+    url: https://koetai.bionames.org
+    operator: Roderic Page
+    orcid: 0000-0002-7101-9767
+    region: United Kingdom
+    since: 2026-09-01
+    description: >-
+      An Oxigraph-backed Koetai deployment focused on biodiversity and
+      taxonomic name data.

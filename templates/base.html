@@ -59,6 +59,7 @@
             </li>
           </ul>
         </li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('mangal') }}"><i class="bi bi-water"></i> Mangal</a></li>
         <li class="nav-item"><a class="nav-link" href="{{ url_for('helppage') }}"><i class="bi bi-book"></i> Help</a></li>
         {% if current_user.is_authenticated %}
         <li class="nav-item"><a class="nav-link" href="{{ url_for('dashboard.index') }}">My Datasets</a></li>
@@ -124,6 +125,8 @@
     <div class="d-flex flex-wrap align-items-center justify-content-between gap-4">
       <div class="text-muted small">
         <strong class="text-white">Koetai</strong> — FAIR SPARQL Platform<br>
+        <a href="{{ url_for('mangal') }}" class="text-white-50 text-decoration-none"
+           style="font-size:.8rem"><i class="bi bi-water"></i> The Mangal — Koetai network directory</a><br>
         <span style="font-size:.75rem">Powered by open-source components</span>
       </div>
       <div class="d-flex align-items-center gap-4 flex-wrap">
