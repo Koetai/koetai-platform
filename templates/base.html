@@ -82,7 +82,16 @@
         <li class="nav-item"><a class="nav-link" href="{{ url_for('index') }}"><i class="bi bi-house"></i><span class="nav-label"> Home</span></a></li>
         <li class="nav-item"><a class="nav-link" href="{{ url_for('endpoints') }}"><i class="bi bi-diagram-3"></i><span class="nav-label"> Endpoints</span></a></li>
         <li class="nav-item"><a class="nav-link" href="{{ url_for('sparql_editor') }}"><i class="bi bi-braces-asterisk"></i><span class="nav-label"> SPARQL</span></a></li>
-        <li class="nav-item"><a class="nav-link" href="{{ url_for('fdp.repository') }}"><i class="bi bi-award"></i><span class="nav-label"> FAIR Data Point</span></a></li>
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+            <i class="bi bi-archive"></i><span class="nav-label"> Metadata</span>
+          </a>
+          <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="{{ url_for('fdp.repository') }}"><i class="bi bi-award me-2"></i>FAIR Data Point</a></li>
+            <li><a class="dropdown-item" href="{{ url_for('fdp.void_index') }}"><i class="bi bi-bar-chart-line me-2"></i>VoID statistics</a></li>
+          </ul>
+        </li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('mangal') }}"><i class="bi bi-water"></i><span class="nav-label"> Mangal</span></a></li>
         <li class="nav-item"><a class="nav-link" href="{{ url_for('helppage') }}"><i class="bi bi-book"></i><span class="nav-label"> Help</span></a></li>
         {% if current_user.is_authenticated %}
         <li class="nav-item"><a class="nav-link" href="{{ url_for('dashboard.index') }}"><i class="bi bi-database"></i><span class="nav-label"> My Datasets</span></a></li>
