@@ -36,6 +36,10 @@ services:
       # past the size of a compressed dump; a file bigger than this is better
       # fetched by the Web tab, which is not capped at all.
       - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-4096}
+      # A local install is disk-constrained and the originals are still on
+      # your own machine, so uploaded sources are dropped once loaded. The
+      # hosted deployment keeps them (config.py default) for provenance.
+      - KEEP_UPLOADED_SOURCES=${KEEP_UPLOADED_SOURCES:-false}
       # Container service names, not localhost.
       - FUSEKI_BASE_URL=http://fuseki:3030
       - FUSEKI_DATASET=${FUSEKI_DATASET:-koetai}

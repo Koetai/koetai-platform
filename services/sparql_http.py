@@ -325,12 +325,16 @@ class SparqlHttpStore:
         return True, f"{verb} <{graph_uri}> ({total:,} statements)"
 
     def drop_graph(self, graph_uri: str, **kw) -> tuple[bool, str]:
+        # Dropping is a write across as many triples as loading them was, so it
+        # gets the load timeout rather than a short one. At 30s a multi-million
+        # triple graph timed out client-side while the store went on to complete
+        # it, leaving the caller believing a delete had failed that had not.
         try:
             r = requests.delete(
                 self._url(self.gsp_path),
                 params={self.gsp_param: graph_uri},
                 auth=self.auth,
-                timeout=30,
+                timeout=self.load_timeout,
             )
             # Deleting a graph that was never created is not an error for our callers.
             if r.status_code == 404:
