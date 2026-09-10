@@ -30,6 +30,13 @@ STORE_CONTAINER="${STORE_CONTAINER:?STORE_CONTAINER is required}"
 STORE_VOLUME="${STORE_VOLUME:?STORE_VOLUME is required}"
 STORE_IMAGE="${STORE_IMAGE:-ghcr.io/oxigraph/oxigraph:latest}"
 POLL_SECONDS="${POLL_SECONDS:-3}"
+# The loader sorts in memory and is the hungriest thing in the deployment:
+# 9M triples measured at 4.1 GB resident, and it grows with the file. It runs
+# as its own `docker run`, so the limits in docker-compose.prod.yml do not
+# reach it — without this a large import can still take the host down, which is
+# exactly what the caps elsewhere exist to prevent. Failing one load beats
+# losing the machine.
+LOADER_MEMORY="${LOADER_MEMORY:-6g}"
 
 mkdir -p "$REQ_DIR" "$RES_DIR"
 echo "loader-agent: watching $REQ_DIR for $STORE_CONTAINER (volume $STORE_VOLUME)"
@@ -81,13 +88,13 @@ process() {
   # is a copy worth not making.
   set +e
   case "$real" in
-    *.gz)  gzip -dc "$real" | docker run --rm -i -v "$STORE_VOLUME":/store \
+    *.gz)  gzip -dc "$real" | docker run --rm -i --memory "$LOADER_MEMORY" -v "$STORE_VOLUME":/store \
              --entrypoint /usr/local/bin/oxigraph "$STORE_IMAGE" \
              load --location /store --format "$format" --graph "$graph" 2>"$RES_DIR/$id.log" ;;
-    *.bz2) bzip2 -dc "$real" | docker run --rm -i -v "$STORE_VOLUME":/store \
+    *.bz2) bzip2 -dc "$real" | docker run --rm -i --memory "$LOADER_MEMORY" -v "$STORE_VOLUME":/store \
              --entrypoint /usr/local/bin/oxigraph "$STORE_IMAGE" \
              load --location /store --format "$format" --graph "$graph" 2>"$RES_DIR/$id.log" ;;
-    *)     docker run --rm -i -v "$STORE_VOLUME":/store \
+    *)     docker run --rm -i --memory "$LOADER_MEMORY" -v "$STORE_VOLUME":/store \
              --entrypoint /usr/local/bin/oxigraph "$STORE_IMAGE" \
              load --location /store --format "$format" --graph "$graph" \
              < "$real" 2>"$RES_DIR/$id.log" ;;
@@ -104,7 +111,7 @@ process() {
     echo "loader-agent: $id optimising the store"
     printf '{"id":"%s","status":"running","message":"optimising the store","started":"%s"}\n' \
       "$id" "$started" > "$RES_DIR/$id.json"
-    docker run --rm -v "$STORE_VOLUME":/store --entrypoint /usr/local/bin/oxigraph \
+    docker run --rm --memory "$LOADER_MEMORY" -v "$STORE_VOLUME":/store --entrypoint /usr/local/bin/oxigraph \
       "$STORE_IMAGE" optimize --location /store >>"$RES_DIR/$id.log" 2>&1 \
       || echo "loader-agent: $id optimise failed (the load itself was fine)"
   fi

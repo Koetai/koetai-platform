@@ -128,6 +128,9 @@ services:
       - STORE_VOLUME=${STORE_VOLUME:-koetai-platform_oxigraph-data}
       - STORE_IMAGE=${STORE_IMAGE:-ghcr.io/oxigraph/oxigraph:latest}
       - ALLOWED_ROOT=/data/uploads
+      # The loader sorts in memory — 9M triples measured at 4.1 GB — and runs
+      # as its own container, outside any limit set on the services here.
+      - LOADER_MEMORY=${LOADER_MEMORY:-6g}
       - REQ_DIR=/data/bulk-loader/requests
       - RES_DIR=/data/bulk-loader/results
     volumes:
