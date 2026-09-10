@@ -1,8 +1,20 @@
 """RUDOF-based shape inference and validation for Koetai platform."""
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
 import config
+
+
+def is_available() -> bool:
+    """Whether the rudof binary is actually here.
+
+    It is optional and deliberately not in the Docker image, so the features
+    that shell out to it have to ask before offering themselves; otherwise the
+    button is live and the answer is a FileNotFoundError.
+    """
+    p = Path(config.RUDOF_BIN)
+    return p.is_file() or shutil.which(config.RUDOF_BIN) is not None
 
 
 def infer_shacl(rdf_file: Path) -> tuple[bool, str]:

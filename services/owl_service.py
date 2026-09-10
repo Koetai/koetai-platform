@@ -80,6 +80,16 @@ def materialize_owlrl(rdf_file: Path, regime: str = "OWL_RL",
         return False, rdf_file, str(e)
 
 
+def riot_available() -> bool:
+    """Whether Jena's riot is on this host.
+
+    It is an optional external binary and on a Docker install it is normally
+    absent — the image carries no JVM. Anything that falls back to riot should
+    ask first rather than discover it through a FileNotFoundError.
+    """
+    return JENA_RIOT.is_file()
+
+
 def normalize_to_nt(rdf_file: Path) -> tuple[bool, Path, str]:
     """
     Use Jena riot to parse any RDF format and emit N-Triples.

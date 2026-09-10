@@ -24,7 +24,7 @@ This project is hosted on two forges. **Codeberg is the primary repository** —
 | **RDF upload** | Turtle, N-Triples, RDF/XML, OWL/XML; async background indexing |
 | **OWL reasoning** | RDFS (Jena, fast) or OWL-RL (owlrl, async) |
 | **Shape inference** | [ShExer](https://github.com/DaniFdezAlvarez/shexer) for ShEx; [RUDOF](https://github.com/rudof-project/rudof) for ShEx/SHACL validation |
-| **Schema visualisation** | [rdf-config](https://github.com/dbcls/rdf-config) SVG diagrams + SPARQL skeletons from inferred shapes |
+| **Schema visualisation** | Mermaid class diagrams from inferred shapes, always; [rdf-config](https://github.com/dbcls/rdf-config) SVG diagrams and SPARQL skeletons additionally, if rdf-config is available (it runs via Docker and is not in the image) |
 | **SPARQL examples** | [sparql-examples](https://github.com/sib-swiss/sparql-examples) RDF format; stored per dataset |
 | **SPARQL editor** | CodeMirror 5 with SPARQL syntax highlighting, auto-complete, and per-dataset or cross-dataset querying |
 | **REST API** | [SPARQLList](https://github.com/dbcls/sparqlist)-style parameterised SPARQL queries exposed as HTTP endpoints |

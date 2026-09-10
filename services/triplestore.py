@@ -177,6 +177,85 @@ def get(ds_row):
     return get_by_name(platform or DEFAULT_BACKEND)
 
 
+def export_sample(ds, max_subjects: int = 5000, timeout: int = 300):
+    """Write a sample of a dataset's triples to a temporary N-Triples file.
+
+    Shape inference and validation read a file, which used to be the uploaded
+    source. That file is not guaranteed to exist — it is removed after loading
+    unless KEEP_UPLOADED_SOURCES says otherwise, an interrupted job clears it,
+    and a dataset filled from several uploads never had one file holding all of
+    it. The store is the thing that actually knows what the dataset contains.
+
+    Samples whole subjects rather than the first N triples: a bare LIMIT would
+    cut descriptions in half, and a shape inferred from half a description is
+    wrong in a way that is hard to see.
+
+    Returns (path, count) with path None when the dataset holds nothing.
+    """
+    import tempfile
+
+    store = get(ds)
+    scope = dataset_scope(ds)
+
+    # Sample per rdf:type, not off the top of the dataset. A flat LIMIT takes
+    # whatever subjects the store returns first — one contiguous run — so a type
+    # holding a small share of the data gets few representatives or none, and its
+    # optional properties disappear from the inferred shape entirely. Shapes are
+    # per type, so sampling per type is what the result is actually made of.
+    ok, types_result = store.sparql_query(
+        "SELECT DISTINCT ?t WHERE { ?s a ?t } LIMIT 64", graphs=scope, timeout=timeout)
+    types = ([b["t"]["value"] for b in types_result.get("results", {}).get("bindings", [])
+              if b.get("t", {}).get("type") == "uri"] if ok else [])
+
+    rows = []
+    if types:
+        per_type = max(50, int(max_subjects) // len(types))
+        for t in types:
+            ok, res = store.sparql_query(
+                "SELECT ?s ?p ?o WHERE { "
+                f"{{ SELECT ?s WHERE {{ ?s a <{t}> }} LIMIT {per_type} }} "
+                "?s ?p ?o }", graphs=scope, timeout=timeout)
+            if ok:
+                rows.extend(res.get("results", {}).get("bindings", []))
+
+    if not rows:
+        # Untyped data, or a store that could not answer the type query.
+        ok, result = store.sparql_query(
+            "SELECT ?s ?p ?o WHERE { "
+            f"{{ SELECT DISTINCT ?s WHERE {{ ?s ?p ?o }} LIMIT {int(max_subjects)} }} "
+            "?s ?p ?o }", graphs=scope, timeout=timeout)
+        if not ok:
+            return None, 0
+        rows = result.get("results", {}).get("bindings", [])
+    if not rows:
+        return None, 0
+
+    def term(t):
+        v = t.get("value", "")
+        kind = t.get("type")
+        if kind == "uri":
+            return f"<{v}>"
+        if kind == "bnode":
+            return f"_:{v}"
+        lit = '"' + v.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\r", "\\r") + '"'
+        if t.get("xml:lang"):
+            return f'{lit}@{t["xml:lang"]}'
+        if t.get("datatype"):
+            return f'{lit}^^<{t["datatype"]}>'
+        return lit
+
+    fd, name = tempfile.mkstemp(suffix=".nt", prefix="koetai-sample-")
+    written = 0
+    with open(fd, "w", encoding="utf-8") as f:
+        for b in rows:
+            try:
+                f.write(f"{term(b['s'])} {term(b['p'])} {term(b['o'])} .\n")
+                written += 1
+            except (KeyError, TypeError):
+                continue
+    return Path(name), written
+
+
 def get_by_name(platform: str):
     builder = _BUILDERS.get(platform)
     if builder is None:

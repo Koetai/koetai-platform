@@ -91,6 +91,17 @@ def generate_for_dataset(rdf_file: Path,
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 
+def is_available() -> bool:
+    """Whether rdf-config can be run at all.
+
+    It is invoked through `docker run`, so this is really asking whether a
+    Docker CLI is present. The image does not carry one, and _run_rdfconfig
+    swallows the resulting failure — which is why the SVG and SPARQL skeleton
+    were simply absent rather than reported.
+    """
+    return shutil.which("docker") is not None
+
+
 def _run_rdfconfig(config_dir: Path, *args: str, timeout: int = 120) -> str | None:
     """
     Run rdf-config via Docker against config_dir.
