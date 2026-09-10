@@ -156,7 +156,7 @@ class SparqlHttpStore:
     def _url(self, path: str) -> str:
         return f"{self.base_url}{path}"
 
-    def sparql_query(self, query: str, graphs: "Scope" = None, **kw) -> tuple[bool, dict]:
+    def sparql_query(self, query: str, graphs: "Scope" = None, timeout: int = None, **kw) -> tuple[bool, dict]:
         """Run a query, optionally confined to `graphs` (see build_scope).
 
         Scoping is enforced by the store via the SPARQL 1.1 Protocol, not by
@@ -175,7 +175,7 @@ class SparqlHttpStore:
                 headers={"Content-Type": "application/sparql-query",
                          "Accept": "application/sparql-results+json"},
                 auth=self.auth,
-                timeout=self.query_timeout,
+                timeout=timeout or self.query_timeout,
             )
             if r.status_code < 400:
                 return True, r.json()
@@ -279,5 +279,6 @@ class SparqlHttpStore:
 
     def is_available(self) -> bool:
         """Cheap reachability probe, used to show which stores a local install has."""
-        ok, _ = self.sparql_query("ASK { ?s ?p ?o }")
+        ok, _ = self.sparql_query("ASK { ?s ?p ?o }",
+                                  timeout=config.BACKEND_PROBE_TIMEOUT)
         return ok

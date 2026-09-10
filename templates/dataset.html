@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_provenance.html' import badge_qlever, badge_fuseki %}
+{% from '_provenance.html' import badge_platform %}
 {% from '_ds_nav.html' import ds_nav with context %}
 {% block title %}{{ ds.label }}{% endblock %}
 {% block content %}
@@ -19,12 +19,14 @@
         <span class="badge bg-info text-dark"><i class="bi bi-diagram-3"></i> federation — {{ ds.sources.splitlines()|select|list|length }} source(s)</span>
         <span class="badge bg-light text-dark border">Comunica</span>
       {% else %}
-      <span class="badge bg-{{ 'success' if triple_count > 0 else ('warning text-dark' if triple_count == 0 else 'secondary') }}">
-        {% if triple_count > 0 %}{{ "{:,}".format(triple_count) }} triples
-        {% elif triple_count == 0 %}empty — no data loaded yet
-        {% else %}not indexed{% endif %}
-      </span>
-      {% if ds.platform == 'fuseki' %}{{ badge_fuseki() }}{% else %}{{ badge_qlever() }}{% endif %}
+      {# Filled in by the fetch below. Counting is a COUNT(*) over the whole graph
+           and takes seconds once a dataset is large; blocking the page on it made
+           the page take as long as the count. #}
+        <span class="badge bg-secondary" id="tripleCount">
+          <span class="spinner-border spinner-border-sm" style="width:.7rem;height:.7rem" role="status"></span>
+          counting…
+        </span>
+      {{ badge_platform(ds.platform) }}
       {% endif %}
       {% if not ds.is_public %}<span class="badge bg-secondary">private</span>{% endif %}
     </div>
@@ -52,8 +54,8 @@
 {{ ds_nav(ds, 'overview') }}
 
 <!-- Quick-start nudge when dataset is empty (not for federation — it has no store to fill) -->
-{% if ds.platform != 'comunica' and triple_count == 0 and current_user.is_authenticated and current_user.id == ds.user_id %}
-<div class="alert alert-info d-flex gap-3 align-items-start">
+{% if ds.platform != 'comunica' and current_user.is_authenticated and current_user.id == ds.user_id %}
+<div class="alert alert-info d-flex gap-3 align-items-start d-none" id="emptyNudge">
   <i class="bi bi-lightbulb fs-4"></i>
   <div>
     <strong>This dataset has no data yet.</strong>
@@ -101,4 +103,40 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+{% if ds.platform != 'comunica' %}
+<script>
+// The page no longer waits on COUNT(*). Ask for it once the page is up and fill
+// the badge in; on a 14M-triple graph that is ~3.4s the reader no longer spends
+// staring at nothing.
+(function () {
+  const el = document.getElementById('tripleCount');
+  if (!el) return;
+  const nudge = document.getElementById('emptyNudge');
+
+  const set = (cls, html) => { el.className = 'badge ' + cls; el.innerHTML = html; };
+
+  fetch('{{ url_for("datasets.triple_count", owner_orcid=ds.orcid_id, slug=ds.slug) }}')
+    .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+    .then(d => {
+      if (d.count === null || d.count === undefined) {
+        // The store did not answer. "Unknown" is not the same as "empty", and
+        // saying "empty" about a dataset that may hold millions is worse than
+        // admitting we could not tell.
+        set('bg-secondary', 'triples: unknown');
+        return;
+      }
+      if (d.count > 0) {
+        set('bg-success', d.count.toLocaleString() + ' triples');
+      } else {
+        set('bg-warning text-dark', 'empty — no data loaded yet');
+        if (nudge) nudge.classList.remove('d-none');
+      }
+    })
+    .catch(() => set('bg-secondary', 'triples: unknown'));
+})();
+</script>
+{% endif %}
 {% endblock %}

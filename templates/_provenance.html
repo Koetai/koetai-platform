@@ -67,3 +67,40 @@
   </svg>
 </a>
 {% endmacro %}
+
+{#
+  One badge per supported backend. `platform` is a dataset's platform column, so
+  anything triplestore.py can resolve has an entry here. It used to be decided as
+  "fuseki, or else QLever", which labelled an Oxigraph dataset — and a Virtuoso,
+  Blazegraph or RDF4J one — as QLever: a claim about where the data lives that
+  was simply wrong.
+#}
+{% macro _badge_plain(label, fill, url, title, size="sm") %}
+{% set w = (label|length * (7 if size == 'md' else 6)) + 18 %}
+<a href="{{ url }}" target="_blank" rel="noopener" title="{{ title }}" class="text-decoration-none">
+  <svg width="{{ w }}" height="{{ '22' if size == 'md' else '18' }}"
+       viewBox="0 0 {{ w }} 22" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="{{ label }}">
+    <rect width="{{ w }}" height="22" rx="3" fill="{{ fill }}"/>
+    <text x="9" y="15" font-family="Arial,sans-serif" font-size="11" font-weight="bold"
+          fill="white">{{ label }}</text>
+  </svg>
+</a>
+{% endmacro %}
+
+{% macro badge_platform(platform, size="sm") %}
+{%- if platform == 'fuseki' -%}{{ badge_fuseki(size) }}
+{%- elif platform == 'qlever' -%}{{ badge_qlever(size) }}
+{%- elif platform == 'oxigraph' -%}
+  {{ _badge_plain('Oxigraph', '#8a5a3a', 'https://oxigraph.org/', 'Powered by Oxigraph', size) }}
+{%- elif platform == 'virtuoso' -%}
+  {{ _badge_plain('Virtuoso', '#1a6b6b', 'https://github.com/openlink/virtuoso-opensource', 'Powered by OpenLink Virtuoso', size) }}
+{%- elif platform == 'blazegraph' -%}
+  {{ _badge_plain('Blazegraph', '#6b3a1a', 'https://blazegraph.com/', 'Powered by Blazegraph', size) }}
+{%- elif platform == 'rdf4j' -%}
+  {{ _badge_plain('RDF4J', '#4a4a6b', 'https://rdf4j.org/', 'Powered by Eclipse RDF4J', size) }}
+{%- elif platform == 'comunica' -%}
+  {{ _badge_plain('Comunica', '#5a2a6b', 'https://comunica.dev/', 'Federated with Comunica', size) }}
+{%- else -%}
+  {{ _badge_plain(platform|default('unknown', true), '#555', '#', 'Backend: ' ~ platform, size) }}
+{%- endif -%}
+{% endmacro %}

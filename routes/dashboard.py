@@ -36,13 +36,17 @@ def new_dataset():
         slug        = request.form["slug"].strip().lower().replace(" ", "-")
         description = request.form.get("description", "").strip()
         is_public   = 1 if request.form.get("is_public") else 0
-        platform    = request.form.get("platform", "qlever")
+        platform    = request.form.get("platform", "")
         if platform not in triplestore.SUPPORTED:
-            platform = "qlever"
+            # Silently falling back to QLever meant a dataset could end up on a
+            # store the user had not chosen, and did not have running.
+            flash(f"Unknown triplestore {platform!r}.", "error")
+            return render_template("dataset_new.html",
+                                   backends=triplestore.backend_choices())
 
         if not label or not slug:
             flash("Label and slug are required.", "error")
-            return render_template("dataset_new.html")
+            return render_template("dataset_new.html", backends=triplestore.backend_choices())
 
         # A federation dataset is defined by its sources, not an upload.
         sources = None
@@ -53,7 +57,7 @@ def new_dataset():
             )
             if not sources:
                 flash("A federation dataset needs at least one source.", "error")
-                return render_template("dataset_new.html")
+                return render_template("dataset_new.html", backends=triplestore.backend_choices())
 
         fdp_keywords = request.form.get("fdp_keywords", "").strip()
         fdp_theme    = request.form.get("fdp_theme", "").strip()
@@ -72,12 +76,12 @@ def new_dataset():
             db.commit()
         except Exception as e:
             flash(f"Could not create dataset: {e}", "error")
-            return render_template("dataset_new.html")
+            return render_template("dataset_new.html", backends=triplestore.backend_choices())
 
         flash(f"Dataset '{label}' created.", "success")
         return redirect(url_for("datasets.view", owner_orcid=current_user.orcid_id, slug=slug))
 
-    return render_template("dataset_new.html")
+    return render_template("dataset_new.html", backends=triplestore.backend_choices())
 
 
 @bp.route("/admin/storage")

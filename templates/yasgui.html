@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_provenance.html' import badge_qlever, badge_fuseki %}
+{% from '_provenance.html' import badge_platform %}
 {% from '_ds_nav.html' import ds_nav with context %}
 {% block title %}SPARQL — {{ ds.label }}{% endblock %}
 {% block head %}
@@ -33,7 +33,7 @@
 <div class="d-flex justify-content-between align-items-center mb-2">
   <h4 class="mb-0">SPARQL — {{ ds.label }}</h4>
   <div class="d-flex gap-2 align-items-center">
-    {% if ds.platform == 'fuseki' %}{{ badge_fuseki() }}{% else %}{{ badge_qlever() }}{% endif %}
+    {{ badge_platform(ds.platform) }}
     <small class="text-muted d-none d-md-block">
       <code>{{ request.host_url }}u/{{ ds.orcid_id }}/{{ ds.slug }}/sparql</code>
     </small>

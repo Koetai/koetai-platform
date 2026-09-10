@@ -64,15 +64,42 @@ def view(owner_orcid=None, slug=None):
         flash("This dataset is private.", "error")
         return redirect(url_for("index"))
 
+    # The triple count is deliberately NOT computed here. It is a COUNT(*) over
+    # the whole graph, which the store answers in seconds once a dataset is
+    # large — 3.4s of a 3.5s page load on a 14M-triple graph — and everything
+    # else on this page is already known. The page renders at once and asks for
+    # the count separately; see triple_count() below.
     db = get_db()
-    ts = triplestore.get(ds)
-    triple_count = ts.count_triples(ds["graph_base"] + "/data")
     shape_count  = db.execute("SELECT COUNT(*) FROM shapes WHERE dataset_id=?", (ds["id"],)).fetchone()[0]
     git_count    = db.execute("SELECT COUNT(*) FROM github_sources WHERE dataset_id=?", (ds["id"],)).fetchone()[0]
     web_count    = db.execute("SELECT COUNT(*) FROM web_sources WHERE dataset_id=?", (ds["id"],)).fetchone()[0]
-    return render_template("dataset.html", ds=ds, triple_count=triple_count,
+    return render_template("dataset.html", ds=ds,
                            shape_count=shape_count,
                            source_counts={"git": git_count, "web": web_count})
+
+
+@bp.route("/<owner_orcid>/<slug>/triple-count")
+def triple_count(owner_orcid, slug):
+    """How many triples the dataset holds, for the page to fill in once it has it.
+
+    Same visibility rules as the page itself: a private dataset does not report
+    its size to anyone but its owner.
+    """
+    ds = _get_dataset_or_404(owner_orcid, slug)
+    if not ds:
+        return jsonify({"error": "Not found"}), 404
+    if not ds["is_public"] and (not current_user.is_authenticated
+                                or current_user.id != ds["user_id"]):
+        return jsonify({"error": "This dataset is private"}), 403
+    if _is_federation(ds):
+        return jsonify({"count": None, "federation": True})
+    try:
+        n = triplestore.get(ds).count_triples(ds["graph_base"] + "/data")
+    except Exception as e:
+        return jsonify({"error": str(e)}), 502
+    # count_triples answers -1 when the store could not be reached or the query
+    # failed; that is "unknown", not "empty", and the page says so.
+    return jsonify({"count": n if n >= 0 else None})
 
 
 def _is_federation(ds):

@@ -119,3 +119,8 @@ GRAPH_BASE = BASE_URL + "/u/{user}/{dataset}"
 
 ALLOWED_RDF_EXTENSIONS = {".ttl", ".nt", ".n3", ".rdf", ".owl", ".trig", ".nq", ".jsonld"}
 MAX_UPLOAD_MB = 500
+# Reachability probes for the "which stores are running" check. Deliberately
+# short: this runs while a page is being rendered, and an unreachable host that
+# refuses the connection answers instantly while one that simply never replies
+# would otherwise hold the request for the full query timeout.
+BACKEND_PROBE_TIMEOUT = int(os.environ.get("BACKEND_PROBE_TIMEOUT", "3"))

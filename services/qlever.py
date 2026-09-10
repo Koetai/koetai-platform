@@ -18,7 +18,7 @@ def sparql_update(query: str, endpoint_url: str = None) -> tuple[bool, str]:
         return False, str(e)
 
 
-def sparql_query(query: str, endpoint_url: str = None, graphs=None) -> tuple[bool, dict]:
+def sparql_query(query: str, endpoint_url: str = None, graphs=None, timeout: int = None) -> tuple[bool, dict]:
     """Run a SPARQL SELECT/CONSTRUCT against the platform QLever instance.
 
     `graphs` (a sparql_http.Scope) confines the query server-side. This matters
@@ -28,7 +28,8 @@ def sparql_query(query: str, endpoint_url: str = None, graphs=None) -> tuple[boo
     url = (endpoint_url or config.QLEVER_PLATFORM_URL)
     try:
         r = requests.post(url, data=scoped_body(query, graphs),
-                          headers={"Accept": "application/sparql-results+json"}, timeout=120)
+                          headers={"Accept": "application/sparql-results+json"},
+                          timeout=timeout or 120)
         if r.status_code < 400:
             return True, r.json()
         return False, {"error": r.text}

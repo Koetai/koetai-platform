@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from '_provenance.html' import badge_sparqlist, badge_qlever, badge_fuseki %}
+{% from '_provenance.html' import badge_sparqlist, badge_platform %}
 {% from '_ds_nav.html' import ds_nav with context %}
 {% block title %}API — {{ ds.label }}{% endblock %}
 {% block content %}
@@ -20,7 +20,7 @@
   </h4>
   <div class="d-flex gap-2 align-items-center">
     {{ badge_sparqlist() }}
-    {% if ds.platform == 'fuseki' %}{{ badge_fuseki() }}{% else %}{{ badge_qlever() }}{% endif %}
+    {{ badge_platform(ds.platform) }}
   </div>
   {% if current_user.is_authenticated and current_user.id == ds.user_id %}
   <a href="{{ url_for('sparqlist.new_query', owner_orcid=ds.orcid_id, slug=ds.slug) }}" class="btn btn-primary btn-sm">
