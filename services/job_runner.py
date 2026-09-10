@@ -60,6 +60,49 @@ def _ensure_runner():
             _thread.start()
 
 
+def reclaim_orphaned() -> int:
+    """Fail any job left 'running' by a process that is no longer here.
+
+    One process runs one job at a time, so a job still marked 'running' when the
+    app starts cannot be: its runner went with the process — a restart, a crash,
+    a container rebuild mid-load. _next_queued only ever claims 'queued', so
+    nothing would pick it up again and the page polling it would report it as
+    loading for ever.
+
+    Failed rather than requeued deliberately: an interrupted load may have
+    written all, some or none of its triples, and repeating it blindly would
+    duplicate them. The message says to check before retrying, because checking
+    is the only way to know.
+    """
+    conn = _raw_conn()
+    # Its working files are orphaned too: the cleanup that normally follows a
+    # job lives in the process that died. The source is re-uploadable and the
+    # extracted members are reproducible, so both go, as they would after any
+    # other failure.
+    stranded = conn.execute(
+        "SELECT id, file_path FROM upload_jobs WHERE status='running'"
+    ).fetchall()
+    for row in stranded:
+        try:
+            path = Path(row["file_path"])
+            path.unlink(missing_ok=True)
+            shutil.rmtree(path.parent / f"x_{row['id']}", ignore_errors=True)
+        except OSError:
+            pass
+
+    with conn:
+        cur = conn.execute(
+            "UPDATE upload_jobs SET status='error', phase='interrupted', "
+            "message='Interrupted — the server restarted while this job was running. "
+            "Some or all of the data may have loaded: check the dataset\u2019s triple "
+            "count before uploading again, or the same triples may be added twice.', "
+            "finished_at=datetime('now') WHERE status='running'"
+        )
+        n = cur.rowcount
+    conn.close()
+    return n
+
+
 def _run_loop():
     while True:
         job = _next_queued()

@@ -11,6 +11,95 @@
   </div>
 </div>
 
+{# Capacity, added after three OOM kills that the app could not see coming:
+   a load died as "Remote end closed connection" while the real event was the
+   kernel taking the triplestore. Headroom is the number that decides whether a
+   large import survives, so it belongs where an admin will look. #}
+<div class="card mb-4">
+  <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-speedometer2"></i> Capacity</span>
+    <span class="text-muted small">host-wide, not per container</span>
+  </div>
+  <div class="card-body">
+    <div class="row g-4">
+      <div class="col-md-6">
+        <div class="d-flex justify-content-between small">
+          <span class="fw-semibold">Memory</span>
+          {% if cap.memory %}
+          <span class="text-muted">{{ '%.1f'|format(cap.memory.available / 1e9) }} GB free
+            of {{ '%.1f'|format(cap.memory.total / 1e9) }} GB</span>
+          {% endif %}
+        </div>
+        {% if cap.memory %}
+        <div class="progress mt-1" style="height:16px">
+          <div class="progress-bar bg-{{ 'danger' if cap.memory.percent_used > 85 else ('warning' if cap.memory.percent_used > 70 else 'success') }}"
+               style="width:{{ cap.memory.percent_used }}%">{{ cap.memory.percent_used }}%</div>
+        </div>
+        {% if cap.low_memory %}
+        <div class="alert alert-warning py-1 px-2 mt-2 mb-0 small">
+          <i class="bi bi-exclamation-triangle"></i> Little memory free. A load holds its
+          transaction in memory until it commits, so a large import may be killed by the
+          kernel — which the app sees only as a dropped connection.
+        </div>
+        {% endif %}
+        {% else %}
+        <p class="text-muted small mb-0">Not readable on this host.</p>
+        {% endif %}
+      </div>
+      <div class="col-md-6">
+        <div class="d-flex justify-content-between small">
+          <span class="fw-semibold">Disk</span>
+          {% if cap.disk %}
+          <span class="text-muted">{{ '%.1f'|format(cap.disk.free / 1e9) }} GB free
+            of {{ '%.1f'|format(cap.disk.total / 1e9) }} GB</span>
+          {% endif %}
+        </div>
+        {% if cap.disk %}
+        <div class="progress mt-1" style="height:16px">
+          <div class="progress-bar bg-{{ 'danger' if cap.disk.percent_used > 90 else ('warning' if cap.disk.percent_used > 75 else 'success') }}"
+               style="width:{{ cap.disk.percent_used }}%">{{ cap.disk.percent_used }}%</div>
+        </div>
+        <p class="text-muted small mb-0 mt-1">
+          Shared with the triplestores: an index is several times the size of its source,
+          and deleting data does not give the space back until the store is compacted.
+        </p>
+        {% endif %}
+      </div>
+    </div>
+
+    <hr class="my-3">
+    <div class="small fw-semibold mb-2">Triplestores</div>
+    <table class="table table-sm mb-0">
+      <tbody>
+      {% for b in cap.backends %}
+        <tr>
+          <td style="width:11rem">{{ b.label }}</td>
+          <td style="width:7rem">
+            {% if b.available %}<span class="badge bg-success">up</span>
+            {% else %}<span class="badge bg-secondary">not reachable</span>{% endif %}
+          </td>
+          <td class="text-muted small">
+            {% if b.detail.version %}v{{ b.detail.version }}{% endif %}
+            {% if b.detail.uptime_s %} · up {{ (b.detail.uptime_s // 3600) }}h{% endif %}
+            {% if b.detail.heap_max %}
+              · heap {{ '%.1f'|format(b.detail.heap_used / 1e9) }} /
+                {{ '%.1f'|format(b.detail.heap_max / 1e9) }} GB ({{ b.detail.heap_percent }}%)
+            {% elif b.available %}
+              <span class="fst-italic">reports nothing about itself</span>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="text-muted small mb-0 mt-2">
+      Only Fuseki reports its own memory. A store's actual footprint, and its logs, need the
+      Docker API — which would mean giving this web app control of the host, so it does not
+      have it. Use <code>docker stats</code> and <code>docker compose logs</code> for that.
+    </p>
+  </div>
+</div>
+
 <!-- Disk summary bar -->
 <div class="card mb-4 border-0 shadow-sm">
   <div class="card-body">
