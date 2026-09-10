@@ -6,6 +6,13 @@ was tested on; nothing here is Hetzner-specific beyond the sizing note.
 
 Budget about half an hour, most of it waiting for DNS.
 
+> **This guide describes the Docker Compose deployment.** From step 5 onwards it
+> uses `docker-compose.prod.yml` and `deploy/Caddyfile.prod`, which are proposed
+> separately so that installs not using Compose need not carry them. If those
+> files are not in your checkout, take them from the compose-overlay pull
+> request; everything before step 5, and the sizing and backup guidance, applies
+> either way.
+
 ## Before you start
 
 You need three things, and two of them take time to arrange, so do them first:
