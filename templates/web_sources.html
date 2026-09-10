@@ -153,21 +153,73 @@ async function importFiles(event, srcId) {
   const apply_owl  = owlCb?.checked || false;
   const owl_regime = owlRegime?.value || 'OWL_RL';
 
-  status.innerHTML = `<div class="spinner-border spinner-border-sm"></div> Importing ${checked.length} file(s)${apply_owl ? ' with OWL reasoning' : ''}…`;
+  status.innerHTML = `<div class="spinner-border spinner-border-sm"></div> Queueing ${checked.length} file(s)${apply_owl ? ' with OWL reasoning' : ''}…`;
   try {
     const r = await fetch(`/u/${OWNER}/${SLUG}/web/${srcId}/import`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({file_ids: checked, apply_owl, owl_regime})
     });
+    if (!r.ok) {
+      const t = await r.text();
+      status.innerHTML = `<div class="alert alert-danger">Import failed (HTTP ${r.status}): ${escapeHtml(t.slice(0, 300))}</div>`;
+      return;
+    }
     const d = await r.json();
     let html = '';
-    if (d.imported?.length) html += `<div class="alert alert-success"><strong>${d.imported.length} imported:</strong><ul class="mb-0 mt-1">${d.imported.map(f => `<li><code>${f}</code></li>`).join('')}</ul></div>`;
-    if (d.errors?.length)   html += `<div class="alert alert-danger"><strong>Errors:</strong><ul class="mb-0 mt-1">${d.errors.map(e => `<li>${e}</li>`).join('')}</ul></div>`;
-    status.innerHTML = html || '<div class="alert alert-secondary">Nothing imported.</div>';
+    if (d.errors?.length) html += `<div class="alert alert-danger"><strong>Errors:</strong><ul class="mb-0 mt-1">${d.errors.map(e => `<li>${escapeHtml(e)}</li>`).join('')}</ul></div>`;
+    if (!d.jobs?.length) { status.innerHTML = html || '<div class="alert alert-secondary">Nothing queued.</div>'; return; }
+
+    // The download and load run in the background, so follow each job rather
+    // than waiting on the request — a large source takes far longer than any
+    // HTTP request should stay open.
+    status.innerHTML = html + `<div class="alert alert-info mb-0"><div id="jobs-${srcId}"></div></div>`;
+    pollImportJobs(srcId, d.jobs);
   } catch(e) {
-    status.innerHTML = `<div class="alert alert-danger">Error: ${e}</div>`;
+    status.innerHTML = `<div class="alert alert-danger">Error: ${escapeHtml(String(e))}</div>`;
   }
+}
+
+function escapeHtml(t) {
+  return String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function pollImportJobs(srcId, jobs) {
+  const box   = document.getElementById(`jobs-${srcId}`);
+  const state = jobs.map(j => ({...j, status: 'queued', phase: 'queued', message: ''}));
+
+  const render = () => {
+    box.innerHTML = state.map(j => {
+      const icon = j.status === 'done'  ? '<i class="bi bi-check-circle-fill text-success"></i>'
+                 : j.status === 'error' ? '<i class="bi bi-x-circle-fill text-danger"></i>'
+                 : '<span class="spinner-border spinner-border-sm"></span>';
+      const detail = j.status === 'error' ? `<div class="small text-danger ms-4">${escapeHtml(j.message)}</div>`
+                   : j.message ? `<div class="small text-muted ms-4">${escapeHtml(j.message)}</div>` : '';
+      return `<div class="mb-1">${icon} <code>${escapeHtml(j.filename)}</code>
+              <span class="badge bg-secondary ms-1">${escapeHtml(j.phase || j.status)}</span>${detail}</div>`;
+    }).join('');
+  };
+  render();
+
+  const tick = async () => {
+    let pending = false;
+    for (const j of state) {
+      if (j.status === 'done' || j.status === 'error') continue;
+      pending = true;
+      try {
+        const r = await fetch(`/u/${OWNER}/${SLUG}/upload/status/${j.job_id}`);
+        if (r.ok) Object.assign(j, await r.json());
+      } catch(e) { /* transient; try again next tick */ }
+    }
+    render();
+    if (pending) {
+      setTimeout(tick, 3000);
+    } else if (state.some(j => j.status === 'done')) {
+      // imported_at badges are rendered server-side, so refresh the file list
+      setTimeout(() => scanFiles(srcId), 1200);
+    }
+  };
+  setTimeout(tick, 1500);
 }
 
 async function checkUpdate(srcId) {

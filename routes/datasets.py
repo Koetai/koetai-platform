@@ -5,6 +5,7 @@ import uuid
 from pathlib import Path
 from flask import (Blueprint, render_template, request, redirect,
                    url_for, flash, jsonify, Response)
+from werkzeug.utils import secure_filename
 from flask_login import login_required, current_user
 import config
 from services.db import get_db
@@ -124,7 +125,8 @@ def upload_page(owner_orcid, slug):
     # available. The page needs to know so it does not offer the one that is not.
     from services import jena_service
     return render_template("upload.html", ds=ds,
-                           jena_available=jena_service.is_available())
+                           jena_available=jena_service.is_available(),
+                           max_upload_mb=config.MAX_UPLOAD_MB)
 
 
 @bp.route("/<owner_orcid>/<slug>/mapping", methods=["GET"])
@@ -258,12 +260,15 @@ def upload(owner_orcid, slug):
         return jsonify({"error": "No file provided"}), 400
 
     ext = Path(f.filename).suffix.lower()
-    if ext not in config.ALLOWED_RDF_EXTENSIONS:
+    if ext not in config.ALLOWED_UPLOAD_EXTENSIONS:
         return jsonify({"error": f"Unsupported format: {ext}"}), 400
 
     upload_dir = config.UPLOAD_DIR / str(current_user.id) / slug
     upload_dir.mkdir(parents=True, exist_ok=True)
-    file_path = upload_dir / f"{uuid.uuid4().hex}{ext}"
+    # Keep the whole name, not just the final suffix: "data.nt.gz" saved as
+    # "<uuid>.gz" loses the .nt, and the job then has to guess the syntax of
+    # what it decompresses.
+    file_path = upload_dir / f"{uuid.uuid4().hex}_{secure_filename(f.filename)}"
     f.save(str(file_path))
 
     apply_owl    = request.form.get("apply_owl") == "true"

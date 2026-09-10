@@ -118,9 +118,44 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 GRAPH_BASE = BASE_URL + "/u/{user}/{dataset}"
 
 ALLOWED_RDF_EXTENSIONS = {".ttl", ".nt", ".n3", ".rdf", ".owl", ".trig", ".nq", ".jsonld"}
-MAX_UPLOAD_MB = 500
+# Compressed RDF is how a large graph is normally published and normally kept:
+# the upload cap applies to the bytes on the wire, so a gzip both fits under it
+# and transfers in a fraction of the time. Accepted anywhere raw RDF is.
+ALLOWED_ARCHIVE_EXTENSIONS = {".zip", ".gz", ".bz2", ".tgz"}
+ALLOWED_UPLOAD_EXTENSIONS  = ALLOWED_RDF_EXTENSIONS | ALLOWED_ARCHIVE_EXTENSIONS
+# Browser upload cap, enforced by Flask against Content-Length. Large files are
+# better fetched server-side (Web sources), which this does not limit.
+MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "500"))
 # Reachability probes for the "which stores are running" check. Deliberately
 # short: this runs while a page is being rendered, and an unreachable host that
 # refuses the connection answers instantly while one that simply never replies
 # would otherwise hold the request for the full query timeout.
 BACKEND_PROBE_TIMEOUT = int(os.environ.get("BACKEND_PROBE_TIMEOUT", "3"))
+# How long a single load into a triplestore may take. Loading is bounded by the
+# store, not the network: roughly 200 MB of N-Triples per 75 s into Fuseki on a
+# laptop, so the old 300 s ceiling failed part-way through anything much over
+# half a gigabyte. An hour is generous rather than tight; a job that hits it is
+# stuck, not slow.
+RDF_LOAD_TIMEOUT = int(os.environ.get("RDF_LOAD_TIMEOUT", "3600"))
+# Line-based RDF (N-Triples, N-Quads) is sent to the store in batches of this
+# many lines rather than as one request. A Graph Store Protocol write is one
+# transaction, and the store holds it in memory until it commits: an unchunked
+# 9M-triple load was measured at 12.7 GB resident, and two real imports were
+# killed by the kernel OOM killer at ~10 GB. Batching bounds that to roughly the
+# size of one batch, at the cost of the load no longer being atomic.
+#
+# 200,000 is measured, not guessed. Loading 2.4M triples into an empty Oxigraph,
+# varying only this:
+#
+#     50,000    56.5s   42k/s   1652 MiB peak
+#    200,000    38.6s   62k/s   1657 MiB
+#    500,000    36.7s   65k/s   1907 MiB
+#  1,000,000    45.0s   53k/s   2084 MiB
+#  2,000,000    44.0s   55k/s   2665 MiB
+#
+# Bigger is not better past ~500k: throughput falls again while memory keeps
+# climbing, so the largest batches are worse on both counts. 500k buys about 5%
+# for 15% more memory, which is the wrong trade when memory is what kills a
+# large load. Throughput against a store that already holds a hundred million
+# triples is roughly half these figures — the shape holds, the numbers do not.
+RDF_LOAD_BATCH_LINES = int(os.environ.get("RDF_LOAD_BATCH_LINES", "200000"))
