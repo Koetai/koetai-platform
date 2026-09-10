@@ -242,11 +242,11 @@ administrator. You should arrive at an empty dashboard with an Admin menu.
   what is worth copying, why a plain `cp` of a live SQLite file is unsafe, and
   when deferring this stops being reasonable.
 - **The fast loader.** `docker-compose.yml` has an optional `loader` service,
-  behind the `fastload` profile, that makes large imports several times quicker.
-  It mounts the Docker socket, which is root on the host. On a machine only you
-  use that may be a fair trade; on a shared instance think harder, and read
-  `deploy/loader-agent/agent.sh` first — it is deliberately short. Over SSH,
-  `scripts/bulk_load.sh` gives the same speed with no daemon holding the socket.
+  behind a `fastload` profile, proposed separately, that makes large imports
+  several times quicker. It mounts the Docker socket, which is root on the host:
+  on a machine only you use that may be a fair trade, and on a shared instance it
+  wants thinking about. Read the agent script before deciding — it is deliberately
+  short. Ordinary batched uploads need none of it.
 - **A firewall.** Only 80 and 443 need to be open. Nothing else in the stack
   publishes a port — the app, the stores and the agent all talk over the compose
   network.
