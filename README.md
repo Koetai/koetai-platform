@@ -232,6 +232,28 @@ Key `.env` variables:
 | `RUDOF_BIN` | Path to rudof binary |
 | `SHEXER_VENV` | Path to Python interpreter with shexer installed |
 
+### Running it in the cloud
+
+`deploy/CLOUD-INSTALL.md` is a start-to-finish install on a fresh Linux host,
+ending with an HTTPS site you sign into with ORCID. It uses
+`docker-compose.prod.yml`, an overlay on the base file that takes the app off the
+public interface, puts Caddy in front for certificates, pins the store's image
+and caps memory — the base file is a single-user laptop install and should not
+face the internet as it stands.
+
+Two things it insists on that are easy to miss: decide `BASE_URL` before loading
+anything, because it is written into every dataset's graph URIs, and set
+`KOETAI_ADMIN_ORCIDS` to your own ORCID, because registration is invitation-only
+and nothing else creates the first administrator.
+
+**There are no backups, by design.** For a single-author instance holding data
+that also exists on the author's own machine, a backup regime costs more
+attention than it earns. That stops being true as soon as other people's work is
+in there, anything cites it, or it holds shapes and examples authored in the UI
+and nowhere else. `deploy/BACKUPS.md` sets out what is at risk — the SQLite
+database, ~100 KB and irreplaceable, as against a triplestore that is enormous
+and reloadable — and a shape for adding one when that day comes.
+
 ### Run
 
 ```bash
