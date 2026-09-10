@@ -71,18 +71,9 @@
           <ul class="dropdown-menu">
             <li><a class="dropdown-item" href="{{ url_for('dashboard.invites') }}"><i class="bi bi-envelope-plus me-2"></i>Invites</a></li>
             <li><a class="dropdown-item" href="{{ url_for('dashboard.admin_storage') }}"><i class="bi bi-hdd-stack me-2"></i>Storage per user</a></li>
-            <li><hr class="dropdown-divider"></li>
-            <li><a class="dropdown-item" href="{{ url_for('dashboard.costs') }}"><i class="bi bi-currency-euro me-2"></i>Cost overview</a></li>
           </ul>
         </li>
         {% endif %}
-        <li class="nav-item">
-          <a class="nav-link {% if current_user.is_authenticated and current_user.is_admin %}{% endif %}"
-             href="{% if current_user.is_authenticated and current_user.is_admin %}{{ url_for('dashboard.costs') }}{% else %}#{% endif %}">
-            <i class="bi bi-currency-euro"></i>
-            {% if monthly_cost_eur %}€{{ "%.0f"|format(monthly_cost_eur) }}/mo{% else %}Costs{% endif %}
-          </a>
-        </li>
         {% endif %}
       </ul>
       <ul class="navbar-nav">
@@ -132,12 +123,12 @@
       <div class="d-flex align-items-center gap-4 flex-wrap">
         <a href="https://qlever.cs.uni-freiburg.de/" target="_blank" rel="noopener"
            title="QLever SPARQL engine">
-          <img src="{{ url_for('static', filename='logos/qlever.png') }}"
-               alt="QLever" style="height:32px;filter:brightness(0) invert(1);opacity:.85">
+          <span class="text-white fw-semibold"
+                style="font-size:1.15rem;letter-spacing:.02em;opacity:.85">QLever</span>
         </a>
         <a href="https://jena.apache.org/documentation/fuseki2/" target="_blank" rel="noopener"
            title="Apache Jena Fuseki">
-          <img src="{{ url_for('static', filename='logos/jena.svg') }}"
+          <img src="{{ url_for('static', filename='logos/jena.png') }}"
                alt="Apache Jena" style="height:36px;filter:brightness(0) invert(1);opacity:.85">
         </a>
         <a href="https://dbcls.rois.ac.jp/" target="_blank" rel="noopener"
