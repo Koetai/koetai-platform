@@ -9,6 +9,7 @@ adding a new open-source store is a line in the registry, not a new module.
 QLever is deliberately not built on this: it has no Graph Store Protocol and
 loads bulk data by building an index offline. See services/qlever.py.
 """
+import re
 from pathlib import Path
 from typing import NamedTuple, Optional
 
@@ -79,6 +80,53 @@ def rdf_content_type(ext: str) -> str:
     return RDF_CONTENT_TYPES.get(ext.lower(), "text/turtle")
 
 
+# ── query form, and what to ask the store for ──────────────────────────────
+#
+# SELECT and ASK return a table of bindings; CONSTRUCT and DESCRIBE return a
+# graph. A store will not convert between the two — it answers 406 — so asking
+# for the wrong one is not a formatting detail, it is a failed query.
+GRAPH_FORMS = {"CONSTRUCT", "DESCRIBE"}
+RESULTS_ACCEPT = "application/sparql-results+json"
+GRAPH_ACCEPT   = "text/turtle"
+
+_FORM_RE = re.compile(r"\b(SELECT|ASK|CONSTRUCT|DESCRIBE)\b", re.I)
+
+
+def query_form(query: str) -> str:
+    """Which of the four SPARQL query forms `query` uses.
+
+    IRIs are removed before comments, not after: an IRI may contain a '#', so
+    stripping comments first truncates `<...skos/core#Concept>` and takes the
+    rest of the line with it. Strings go too, so that a literal mentioning one
+    of the keywords does not decide the answer.
+
+    Defaults to SELECT, which is the safe guess: it only chooses a default
+    Accept header, and a client that named a format is never overridden.
+    """
+    t = re.sub(r"<[^<>\s]*>", " ", query)          # IRIs first — they contain '#'
+    t = re.sub(r"#[^\n]*", " ", t)                  # then comments
+    t = re.sub(r'"""(?:.|\n)*?"""', " ", t)
+    t = re.sub(r"\'\'\'(?:.|\n)*?\'\'\'", " ", t)
+    t = re.sub(r'"(?:[^"\\\n]|\\.)*"', " ", t)
+    t = re.sub(r"\'(?:[^\'\\\n]|\\.)*\'", " ", t)
+    m = _FORM_RE.search(t)
+    return m.group(1).upper() if m else "SELECT"
+
+
+def accept_for(query: str, client_accept: str = "") -> str:
+    """The Accept header to send to the store.
+
+    A client that asked for a specific format gets it — that is what makes the
+    endpoint usable for CSV, XML or N-Triples. A client that asked for nothing
+    in particular (curl sends */*, fetch sends nothing, a browser sends a list
+    ending in */*) gets a default chosen by the query form.
+    """
+    a = (client_accept or "").strip()
+    if a and "*/*" not in a and "text/html" not in a:
+        return a
+    return GRAPH_ACCEPT if query_form(query) in GRAPH_FORMS else RESULTS_ACCEPT
+
+
 class SparqlHttpStore:
     """A triplestore reachable over SPARQL 1.1 + Graph Store Protocol."""
 
@@ -134,6 +182,35 @@ class SparqlHttpStore:
             return False, {"error": r.text}
         except Exception as e:
             return False, {"error": str(e)}
+
+    def sparql_query_raw(self, query: str, graphs: "Scope" = None,
+                         accept: str = None, timeout: int = None):
+        """Run a query and return the store's own response untouched.
+
+        sparql_query() parses JSON because that is what the rest of the app
+        wants. A public SPARQL endpoint has a different job: hand back what the
+        client asked for, in the format the store produced it. That is the only
+        way CONSTRUCT and DESCRIBE can work at all — they return a graph, and
+        there is no JSON result object to parse.
+
+        Returns (ok, body: bytes, content_type: str, status: int).
+        """
+        accept = accept or RESULTS_ACCEPT
+        try:
+            r = requests.post(
+                self._url(self.query_path),
+                params=scoped_params(graphs),
+                data=query.encode(),
+                headers={"Content-Type": "application/sparql-query",
+                         "Accept": accept},
+                auth=self.auth,
+                timeout=timeout or self.query_timeout,
+            )
+            return (r.status_code < 400, r.content,
+                    r.headers.get("Content-Type", "application/octet-stream"),
+                    r.status_code)
+        except Exception as e:
+            return False, str(e).encode(), "text/plain; charset=utf-8", 502
 
     def sparql_update(self, query: str, **kw) -> tuple[bool, str]:
         try:
