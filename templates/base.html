@@ -10,15 +10,57 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <style>
     :root { --koetai-blue: #1a4a8a; --koetai-teal: #0d8a7c; }
-    body   { background: #f8f9fa; }
+    /* Sticky footer: the page is a column at least as tall as the viewport, and
+       the content block is the part that grows. Without this the footer sits
+       directly under short content, half way up the window. The footer keeps
+       its mt-5, which still spaces it off long content. */
+    body   { background: #f8f9fa; min-height: 100vh; display: flex; flex-direction: column; }
+    .page-content { flex: 1 0 auto; }
+    /* Kill the elastic overscroll: flicking up and down used to rubber-band the
+       whole page past its ends. 'none' rather than 'contain' because contain
+       only stops the scroll chaining to the parent and leaves the bounce itself.
+       Set on html, which is the element that governs the viewport; on body alone
+       it is not guaranteed to propagate the way overflow does. */
+    html, body { overscroll-behavior-y: none; }
     .navbar { background: var(--koetai-blue) !important; }
     .navbar-brand { font-weight: 700; letter-spacing:.04em; color:#fff !important; }
-    .nav-link { color: rgba(255,255,255,.85) !important; }
-    .nav-link:hover { color:#fff !important; }
+    /* Scoped to the navbar: unscoped, this painted every .nav-link on the page
+       white, including the dataset and shape tabs, which sit on the light body
+       background and so became invisible. */
+    .navbar .nav-link { color: rgba(255,255,255,.85) !important; }
+    .navbar .nav-link:hover { color:#fff !important; }
+    /* Three tiers, because the middle one used to break. Below lg the items sit
+       in the collapsed menu and keep their labels. In the lg band the bar goes
+       horizontal but the container is only 960px, and a signed-in admin's items
+       need about 1004px with every label shown, so each label wrapped underneath
+       its own icon and the bar became two rows. From xl the container is 1140px
+       and they fit, so labels come back. Hence: icon + label, icon alone, then
+       the burger. The band is exactly lg — measured, not guessed.
+
+       The label is hidden the visually-hidden way rather than with display:none
+       so it stays the link's accessible name: a bare bootstrap-icon <i> has no
+       text of its own, and display:none would leave a screen reader nothing but
+       an unlabelled link. */
+    .navbar .nav-link { white-space: nowrap; }
+    @media (min-width: 992px) and (max-width: 1199.98px) {
+      .navbar .nav-label {
+        position: absolute; width: 1px; height: 1px;
+        padding: 0; margin: -1px; overflow: hidden;
+        clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+      }
+    }
     .badge-orcid { background:#a6ce39; color:#000; font-size:.75em; }
+    /* The signed-in name comes from ORCID and can be arbitrarily long. At xl the
+       row clears by about 130px with a short name, so cap the name and ellipsis
+       it rather than let one long name wrap the bar again. */
+    .navbar .badge-orcid { display:inline-block; max-width:14rem; overflow:hidden;
+       text-overflow:ellipsis; white-space:nowrap; vertical-align:bottom; }
     .card-dataset { border-left: 4px solid var(--koetai-teal); }
     pre.shex, pre.mermaid-src { background:#1e1e1e; color:#d4d4d4;
-      border-radius:.4rem; padding:1rem; font-size:.8rem; max-height:400px; overflow:auto; }
+      border-radius:.4rem; padding:1rem; font-size:.8rem; max-height:400px; overflow:auto;
+      /* Same annoyance one level down: scrolling to the end of a capped code
+         block handed the rest of the gesture to the page, which then jumped. */
+      overscroll-behavior: contain; }
     .mermaid { background:#fff; border:1px solid #dee2e6; border-radius:.4rem; padding:1rem; }
   </style>
   {% block head %}{% endblock %}
@@ -37,36 +79,17 @@
     </button>
     <div class="collapse navbar-collapse" id="nav">
       <ul class="navbar-nav me-auto">
-        <li class="nav-item"><a class="nav-link" href="{{ url_for('index') }}">Home</a></li>
-        <li class="nav-item"><a class="nav-link" href="{{ url_for('endpoints') }}"><i class="bi bi-diagram-3"></i> Endpoints</a></li>
-        <li class="nav-item"><a class="nav-link" href="{{ url_for('sparql_editor') }}"><i class="bi bi-braces-asterisk"></i> SPARQL</a></li>
-        <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-            <i class="bi bi-archive"></i> Metadata
-          </a>
-          <ul class="dropdown-menu">
-            <li>
-              <a class="dropdown-item" href="{{ url_for('fdp.repository') }}">
-                <i class="bi bi-award text-primary me-2"></i>FAIR Data Point
-                <span class="d-block small text-muted ms-4">DCAT / FDP-O catalogue</span>
-              </a>
-            </li>
-            <li>
-              <a class="dropdown-item" href="{{ url_for('fdp.void_index') }}">
-                <i class="bi bi-bar-chart-line text-primary me-2"></i>VoID statistics
-                <span class="d-block small text-muted ms-4">Class &amp; property profiles</span>
-              </a>
-            </li>
-          </ul>
-        </li>
-        <li class="nav-item"><a class="nav-link" href="{{ url_for('mangal') }}"><i class="bi bi-water"></i> Mangal</a></li>
-        <li class="nav-item"><a class="nav-link" href="{{ url_for('helppage') }}"><i class="bi bi-book"></i> Help</a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('index') }}"><i class="bi bi-house"></i><span class="nav-label"> Home</span></a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('endpoints') }}"><i class="bi bi-diagram-3"></i><span class="nav-label"> Endpoints</span></a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('sparql_editor') }}"><i class="bi bi-braces-asterisk"></i><span class="nav-label"> SPARQL</span></a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('fdp.repository') }}"><i class="bi bi-award"></i><span class="nav-label"> FAIR Data Point</span></a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('helppage') }}"><i class="bi bi-book"></i><span class="nav-label"> Help</span></a></li>
         {% if current_user.is_authenticated %}
-        <li class="nav-item"><a class="nav-link" href="{{ url_for('dashboard.index') }}">My Datasets</a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('dashboard.index') }}"><i class="bi bi-database"></i><span class="nav-label"> My Datasets</span></a></li>
         {% if current_user.is_admin %}
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
-            <i class="bi bi-shield-lock"></i> Admin
+            <i class="bi bi-shield-lock"></i><span class="nav-label"> Admin</span>
           </a>
           <ul class="dropdown-menu">
             <li><a class="dropdown-item" href="{{ url_for('dashboard.invites') }}"><i class="bi bi-envelope-plus me-2"></i>Invites</a></li>
@@ -80,7 +103,7 @@
         {% if current_user.is_authenticated %}
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
-            <span class="badge badge-orcid"><i class="bi bi-person-badge"></i> {{ current_user.name or current_user.orcid_id }}</span>
+            <span class="badge badge-orcid"><i class="bi bi-person-badge"></i><span class="nav-label"> {{ current_user.name or current_user.orcid_id }}</span></span>
           </a>
           <ul class="dropdown-menu dropdown-menu-end">
             <li><span class="dropdown-item-text text-muted small">{{ current_user.orcid_id }}</span></li>
@@ -91,7 +114,7 @@
         {% else %}
         <li class="nav-item">
           <a class="nav-link" href="{{ url_for('auth.login') }}">
-            <img src="https://orcid.org/sites/default/files/images/orcid_16x16.png" width="16"> Sign in with ORCID
+            <img src="https://orcid.org/sites/default/files/images/orcid_16x16.png" width="16" alt=""><span class="nav-label"> Sign in with ORCID</span>
           </a>
         </li>
         {% endif %}
@@ -100,7 +123,7 @@
   </div>
 </nav>
 
-<div class="container mt-4">
+<div class="container mt-4 page-content">
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% for cat, msg in messages %}
     <div class="alert alert-{{ 'danger' if cat == 'error' else cat }} alert-dismissible fade show">
@@ -123,17 +146,22 @@
       <div class="d-flex align-items-center gap-4 flex-wrap">
         <a href="https://qlever.cs.uni-freiburg.de/" target="_blank" rel="noopener"
            title="QLever SPARQL engine">
-          <span class="text-white fw-semibold"
-                style="font-size:1.15rem;letter-spacing:.02em;opacity:.85">QLever</span>
+          <img src="{{ url_for('static', filename='logos/qlever-white.png') }}"
+               alt="QLever" style="height:30px;filter:brightness(0) invert(1);opacity:.85">
         </a>
         <a href="https://jena.apache.org/documentation/fuseki2/" target="_blank" rel="noopener"
            title="Apache Jena Fuseki">
           <img src="{{ url_for('static', filename='logos/jena.png') }}"
                alt="Apache Jena" style="height:36px;filter:brightness(0) invert(1);opacity:.85">
         </a>
+        <a href="https://oxigraph.org/" target="_blank" rel="noopener"
+           title="Oxigraph SPARQL database">
+          <img src="{{ url_for('static', filename='logos/oxigraph.svg') }}"
+               alt="Oxigraph" style="height:32px;filter:brightness(0) invert(1);opacity:.85">
+        </a>
         <a href="https://dbcls.rois.ac.jp/" target="_blank" rel="noopener"
            title="Database Center for Life Science">
-          <img src="https://dbcls.rois.ac.jp/img/logo_dbcls_white.svg"
+          <img src="{{ url_for('static', filename='logos/dbcls-white.svg') }}"
                alt="DBCLS" style="height:32px;opacity:.85">
         </a>
       </div>
