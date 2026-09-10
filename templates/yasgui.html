@@ -40,11 +40,11 @@
   </div>
 </div>
 
-<textarea id="query">{% if preload_query %}{{ preload_query }}{% else %}SELECT ?s ?p ?o
+<textarea id="query">{% if preload_query %}{{ preload_query }}{% else %}# This endpoint is already confined to your dataset, so a bare pattern
+# reads its data graph: <{{ ds.graph_base }}/data>
+SELECT ?s ?p ?o
 WHERE {
-  GRAPH <{{ ds.graph_base }}/data> {
-    ?s ?p ?o
-  }
+  ?s ?p ?o
 }
 LIMIT 25{% endif %}</textarea>
 

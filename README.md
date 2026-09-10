@@ -105,6 +105,15 @@ Protocol, so supporting another compliant store is a few lines in
 > server is started with `--persist-updates` (Qleverfile: `PERSIST_UPDATES = true`).
 > Without it, uploaded data is silently lost when the engine stops.
 
+> **Oxigraph needs 0.5.11 or later**: earlier 0.5.x releases honour only the
+> *last* `named-graph-uri` of a SPARQL request and drop the rest, which left a
+> dataset's `/examples` and `/shapes` graphs unreachable through `GRAPH` and made
+> the query editor's prefilled query return nothing. Fixed in
+> [0.5.11](https://github.com/oxigraph/oxigraph/releases/tag/v0.5.11)
+> ([#1862](https://github.com/oxigraph/oxigraph/issues/1862),
+> [#1835](https://github.com/oxigraph/oxigraph/issues/1835)), which
+> `ghcr.io/oxigraph/oxigraph:latest` now resolves to.
+
 ### Federation datasets (Comunica)
 
 A dataset with `platform='comunica'` is **virtual**: it stores no data of its own

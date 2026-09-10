@@ -77,6 +77,8 @@ services:
   # ───────────────────────────────────────────────────────────────────────────
   # Oxigraph — smallest durable option. Good default on a laptop.
   # ───────────────────────────────────────────────────────────────────────────
+  # Needs 0.5.11 or later: earlier 0.5.x drops all but the last named-graph-uri,
+  # which breaks per-dataset graph scoping. See the README note.
   oxigraph:
     image: ghcr.io/oxigraph/oxigraph:latest
     restart: unless-stopped

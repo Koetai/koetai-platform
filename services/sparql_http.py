@@ -43,6 +43,26 @@ def scoped_body(query: str, graphs: Optional[Scope]) -> dict:
     return body
 
 
+def scoped_params(graphs: Optional[Scope]) -> dict:
+    """Graph restrictions as URL query parameters.
+
+    The companion to scoped_body for stores queried with "query via POST
+    directly" (SPARQL 1.1 Protocol 2.1.3): the query travels as the raw body, so
+    the graph parameters have to go in the URL. Oxigraph 0.5 additionally
+    rejects a repeated named-graph-uri in a form-encoded body — it reports
+    "'named-graph-uri' cannot be set both in the body and the URL query" — so
+    the URL is also the only encoding it accepts for a multi-graph scope.
+    """
+    if not graphs:
+        return {}
+    params = {}
+    if graphs.default:
+        params["default-graph-uri"] = graphs.default
+    if graphs.named:
+        params["named-graph-uri"] = list(graphs.named)
+    return params
+
+
 RDF_CONTENT_TYPES = {
     ".ttl":    "text/turtle",
     ".n3":     "text/n3",
@@ -96,10 +116,16 @@ class SparqlHttpStore:
         permitted graphs and an explicit GRAPH <other> simply matches nothing.
         """
         try:
+            # "Query via POST directly": the query is the request body and the
+            # graph restrictions are URL parameters. Preferred over posting
+            # everything form-encoded because Oxigraph rejects a repeated
+            # named-graph-uri in the body — see scoped_params.
             r = requests.post(
                 self._url(self.query_path),
-                data=scoped_body(query, graphs),
-                headers={"Accept": "application/sparql-results+json"},
+                params=scoped_params(graphs),
+                data=query.encode(),
+                headers={"Content-Type": "application/sparql-query",
+                         "Accept": "application/sparql-results+json"},
                 auth=self.auth,
                 timeout=self.query_timeout,
             )
