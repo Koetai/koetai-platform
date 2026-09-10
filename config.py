@@ -143,6 +143,10 @@ RDF_LOAD_TIMEOUT = int(os.environ.get("RDF_LOAD_TIMEOUT", "3600"))
 # 9M-triple load was measured at 12.7 GB resident, and two real imports were
 # killed by the kernel OOM killer at ~10 GB. Batching bounds that to roughly the
 # size of one batch, at the cost of the load no longer being atomic.
+# Where the app and the loader agent exchange requests. The agent is the only
+# thing in the deployment with Docker access; the app only writes files here.
+# See services/bulk_loader.py and deploy/loader-agent/agent.sh.
+BULK_LOADER_DIR = os.environ.get("BULK_LOADER_DIR", "/data/bulk-loader")
 #
 # 200,000 is measured, not guessed. Loading 2.4M triples into an empty Oxigraph,
 # varying only this:
