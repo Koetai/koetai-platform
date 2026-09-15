@@ -38,6 +38,10 @@ This project is hosted on two forges. **Codeberg is the primary repository** —
 
 ## Architecture
 
+See [docs/architecture](docs/architecture/README.md) for diagrams of the
+system components, the async job pipeline, and the triplestore backend
+abstraction.
+
 ```
 Flask (Python)
 ├── ORCID OAuth 2.0        — flask-login + requests-oauthlib
