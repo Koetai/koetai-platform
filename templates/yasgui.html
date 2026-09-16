@@ -228,6 +228,20 @@ function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+// An example's keywords are stored as a JSON array (routes/examples.py encodes
+// them with json.dumps), so splitting the raw column on commas yields the
+// brackets and quotes as well. Older rows may still hold a bare list.
+function exampleKeywords(ex) {
+  const raw = ex.keywords;
+  if (Array.isArray(raw)) return raw.map(String);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed.map(String);
+  } catch { /* not JSON — fall back to the comma-separated form */ }
+  return String(raw).split(',').map(k => k.trim()).filter(Boolean);
+}
+
 // Load examples
 (async () => {
   const el = document.getElementById('exampleList');
@@ -239,22 +253,30 @@ function escHtml(s) {
       return;
     }
     let html = '<div class="list-group list-group-flush">';
-    for (const ex of examples) {
-      const kw = (ex.keywords || '').split(',').filter(Boolean)
-        .map(k => `<span class="badge bg-light text-dark border ms-1">${k.trim()}</span>`).join('');
+    examples.forEach((ex, i) => {
+      const kw = exampleKeywords(ex)
+        .map(k => `<span class="badge bg-light text-dark border ms-1">${escHtml(k)}</span>`).join('');
       html += `<div class="list-group-item list-group-item-action px-0 py-2 d-flex justify-content-between align-items-start">
         <div>
           <span class="fw-semibold small">${escHtml(ex.label)}</span>${kw}
           ${ex.description ? `<div class="text-muted" style="font-size:.8rem">${escHtml(ex.description)}</div>` : ''}
         </div>
-        <button class="btn btn-sm btn-outline-primary ms-2 text-nowrap"
-                onclick="editor.setValue(${JSON.stringify(ex.query)}); window.scrollTo({top:0,behavior:'smooth'})">
+        <button class="btn btn-sm btn-outline-primary ms-2 text-nowrap" data-example="${i}">
           <i class="bi bi-arrow-up-circle"></i> Load
         </button>
       </div>`;
-    }
+    });
     html += '</div>';
     el.innerHTML = html;
+    // The query is looked up by index rather than written into the markup: a
+    // SPARQL query is full of quotes and newlines, and anything carrying it
+    // through HTML has to survive both.
+    el.addEventListener('click', e => {
+      const btn = e.target.closest('button[data-example]');
+      if (!btn) return;
+      editor.setValue(examples[btn.dataset.example].query || '');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
   } catch { el.innerHTML = '<span class="text-muted small">Could not load examples.</span>'; }
 })();
 </script>
