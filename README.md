@@ -174,6 +174,50 @@ Those took a Fuseki volume from 6.8 GB to 201 MB and an Oxigraph one from 7.3 GB
 to 83 MB. On a local install `docker compose down -v` is the blunter equivalent,
 and destroys the data with it.
 
+### Loading a large file faster
+
+Uploads go into the store over the SPARQL Graph Store Protocol, which is the
+store's transactional path. Oxigraph's own loader is not, and the gap is wide:
+2.4M triples measured at **67 s over HTTP against 4 s with the loader**, about
+17x. On an 11 GB dump that is the difference between most of an hour and a
+couple of minutes.
+
+`scripts/bulk_load.sh` uses it from the command line:
+
+```bash
+scripts/bulk_load.sh --slug col --file ~/taxa.nt.gz
+```
+
+Create the dataset in the UI first — the script reads its graph URI and backend
+from the app, rather than inventing a graph nothing would query. A gzip is
+streamed into the loader rather than unpacked to disk, and the script refuses to
+run while another upload is in progress, since stopping the store would kill it.
+
+The same thing is available as a **Fast load** button on a dataset's Upload tab,
+but only where it can actually work: an admin, on an Oxigraph dataset, with the
+loader agent running. Anywhere else the button is not offered.
+
+The agent is what makes the button possible, and it exists for a security
+reason. The loader needs exclusive access to the database directory, so
+**Oxigraph stops while a fast load runs** and the endpoint is unavailable until
+it finishes. Stopping a container takes Docker access, and an app with the
+Docker socket is an app with root on the host — so the app does not get it.
+Instead it writes a request file into a directory that `deploy/loader-agent`
+watches, and reads the result back. The agent's container, volume and image are
+configuration rather than part of a request, and a request's file must resolve
+inside the uploads directory, so the worst it can be made to do is load a file
+the app already wrote and restart the store.
+
+The loader reads `.nt`, `.nq` and `.ttl`, optionally gzipped or bzip2ed. It
+sorts in memory and is the hungriest thing in the deployment — 9M triples
+measured at 4.1 GB resident — so the agent caps it (`LOADER_MEMORY`, 6 GB by
+default): failing one oversized load beats losing the machine. Optimising the
+store afterwards is offered as a checkbox; it is a second pass over the data,
+worth it after a big import and not worth it after a small one.
+
+Fuseki has its own equivalent (`tdb2.tdbloader`) and QLever builds its index
+offline; neither is wired up here.
+
 ### Federation datasets (Comunica)
 
 A dataset with `platform='comunica'` is **virtual**: it stores no data of its own
