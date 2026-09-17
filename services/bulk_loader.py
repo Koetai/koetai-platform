@@ -64,8 +64,15 @@ def rdf_format(path: Path) -> str | None:
     return None
 
 
-def submit(file_path: Path, graph_uri: str, optimise: bool = False) -> tuple[bool, str]:
-    """Queue a bulk load. Returns (ok, request_id_or_error)."""
+def submit(file_path: Path, graph_uri: str, optimise: bool = False,
+           replace: bool = False) -> tuple[bool, str]:
+    """Queue a bulk load. Returns (ok, request_id_or_error).
+
+    `replace` clears the graph before loading, which the agent does against the
+    stopped store. It is not atomic: a load that fails after the clear leaves
+    the graph empty. The ordinary upload path replaces with a Graph Store PUT
+    and does not have that failure mode.
+    """
     if not is_available():
         return False, "The bulk loader is not running."
     fmt = rdf_format(file_path)
@@ -75,7 +82,7 @@ def submit(file_path: Path, graph_uri: str, optimise: bool = False) -> tuple[boo
     request_id = uuid.uuid4().hex
     REQUEST_DIR.mkdir(parents=True, exist_ok=True)
     payload = {"id": request_id, "file": str(file_path), "graph": graph_uri,
-               "format": fmt, "optimise": bool(optimise)}
+               "format": fmt, "optimise": bool(optimise), "replace": bool(replace)}
     # Write beside the target and rename, so the agent never reads a half-written
     # request — it polls the directory and would otherwise catch one mid-write.
     tmp = REQUEST_DIR / f".{request_id}.tmp"

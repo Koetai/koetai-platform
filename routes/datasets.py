@@ -336,7 +336,12 @@ def bulk_load(owner_orcid, slug):
     f.save(str(file_path))
 
     optimise = request.form.get("optimise") == "true"
-    ok, result = bulk_loader.submit(file_path, ds["graph_base"] + "/data", optimise=optimise)
+    # The same "Replace existing data" checkbox the ordinary upload reads. It
+    # used to be ignored here, silently: the box sits directly above the button,
+    # so a fast load appended while the page said it would replace.
+    replace = request.form.get("replace_data") == "true"
+    ok, result = bulk_loader.submit(file_path, ds["graph_base"] + "/data",
+                                    optimise=optimise, replace=replace)
     if not ok:
         file_path.unlink(missing_ok=True)
         return jsonify({"error": result}), 500

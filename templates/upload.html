@@ -99,7 +99,10 @@
       <strong>Fast load</strong> hands the file to the triplestore's own loader instead of
       sending it over HTTP — roughly seventeen times quicker on a large file. The store is
       <strong>stopped while it runs</strong>, so every dataset on this server is offline until
-      it finishes, and the data is appended rather than replacing what is there.
+      it finishes. It appends, unless <strong>Replace existing data</strong> above is ticked —
+      then the graph is cleared first, in the same outage. That clear is a separate step from
+      the load, so a failed import leaves the graph empty; an ordinary upload replaces
+      atomically and does not.
       Reads <code>.nt</code>, <code>.nq</code> and <code>.ttl</code>, optionally <code>.gz</code> or <code>.bz2</code>.
       <br><strong>Optimise afterwards</strong> compacts the store while it is already stopped —
       the loader writes a layout that is quick to write and slower to read, and recommends this
@@ -179,14 +182,23 @@ document.getElementById('fastBtn').addEventListener('click', async () => {
       '<code>.nt</code>, <code>.nq</code> and <code>.ttl</code>, optionally gzipped or bzip2ed.</div>';
     return;
   }
+  const replacing = document.getElementById('replaceData').checked;
   if (!confirm('This stops the triplestore while it loads, taking every dataset on this ' +
-               'server offline until it finishes. Continue?')) return;
+               'server offline until it finishes.' +
+               (replacing
+                 ? '\n\nReplace existing data is ticked, so this graph is cleared first. ' +
+                   'Unlike an ordinary upload the clear and the load are separate steps, ' +
+                   'so if the import fails the graph is left EMPTY and you will need to ' +
+                   'load it again.'
+                 : '') +
+               '\n\nContinue?')) return;
 
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Uploading…';
   const fd = new FormData();
   fd.append('rdf_file', file);
   fd.append('optimise', document.getElementById('optimiseAfter').checked ? 'true' : 'false');
+  fd.append('replace_data', replacing ? 'true' : 'false');
 
   try {
     const r = await fetch('{{ url_for("datasets.bulk_load", owner_orcid=ds.orcid_id, slug=ds.slug) }}',

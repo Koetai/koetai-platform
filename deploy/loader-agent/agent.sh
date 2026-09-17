@@ -61,6 +61,7 @@ process() {
   graph="$(jq -r '.graph // empty' "$req")"
   format="$(jq -r '.format // "nt"' "$req")"
   optimise="$(jq -r '.optimise // false' "$req")"
+  replace="$(jq -r '.replace // false' "$req")"
   rm -f "$req"
 
   printf '{"id":"%s","status":"running","message":"starting","started":"%s"}\n' \
@@ -82,6 +83,26 @@ process() {
 
   if ! docker stop "$STORE_CONTAINER" >/dev/null 2>&1; then
     fail "$id" "could not stop $STORE_CONTAINER"; return
+  fi
+
+  # Replacing means clearing the graph first. It happens here, against the
+  # stopped store, so it costs no second outage — and it uses the graph already
+  # named in the request, so this grants the agent nothing it could not do by
+  # loading into that graph anyway.
+  #
+  # This is deliberately NOT atomic, unlike the Graph Store PUT the ordinary
+  # upload uses. If the load below fails, the old triples are already gone and
+  # the graph is left empty. The UI says so before it starts.
+  if [ "$replace" = "true" ]; then
+    echo "loader-agent: $id clearing $graph before loading"
+    if ! docker run --rm --memory "$LOADER_MEMORY" -v "$STORE_VOLUME":/store \
+           --entrypoint /usr/local/bin/oxigraph "$STORE_IMAGE" \
+           update --location /store -u "DROP SILENT GRAPH <$graph>" \
+           >>"$RES_DIR/$id.log" 2>&1; then
+      docker start "$STORE_CONTAINER" >/dev/null 2>&1 || true
+      fail "$id" "could not clear $graph; nothing was loaded and the store is back up"
+      return
+    fi
   fi
 
   # A gzip is streamed in rather than expanded to disk first; at this size that
