@@ -1,0 +1,15 @@
+@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix schema: <https://schema.org/> .
+
+<> a prov:Activity, schema:CreativeWork ;
+  dcterms:description "BHL TSV dump materialized to RDF via the Koetai bhl-pipeline" ;
+  dcterms:created "{{RUN_DATE}}"^^<http://www.w3.org/2001/XMLSchema#date> ;
+  prov:used [
+    a prov:Entity ;
+    dcterms:source <https://www.biodiversitylibrary.org/data/data.zip> ;
+    dcterms:identifier "{{DUMP_CHECKSUM}}"
+  ] ;
+  schema:codeRepository <https://codeberg.org/andrawaag/koetai-platform> ;
+  dcterms:hasVersion "{{GIT_COMMIT}}" ;
+  prov:wasAssociatedWith <https://koetai.semscape.org> .
