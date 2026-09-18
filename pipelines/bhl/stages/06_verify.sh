@@ -54,7 +54,7 @@ curl -s -H "Accept: application/sparql-results+json" \
   --data-urlencode "query=${SPOT_QUERY}" \
   "http://localhost:7031/"
 echo
-echo "(expect a real, nonzero count matching what today's earlier verified query found — 614)"
+echo "(expect a real, nonzero count)"
 
 echo
 echo "Stage 06 passed count verification. Review the spot-check above, then confirm the swap:"
