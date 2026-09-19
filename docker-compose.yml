@@ -93,7 +93,11 @@ services:
   # Needs 0.5.11 or later: earlier 0.5.x drops all but the last named-graph-uri,
   # which breaks per-dataset graph scoping. See the README note.
   oxigraph:
-    image: ghcr.io/oxigraph/oxigraph:latest
+    # Pinned, and pinned in one place: the loader agent below runs the same
+    # image against the same volume, and the two silently disagreeing is worse
+    # than either choice on its own. 0.5.11 is the floor the README requires —
+    # 0.5.8 to 0.5.10 broke named-graph scoping.
+    image: ghcr.io/oxigraph/oxigraph:${OXIGRAPH_VERSION:-0.5.11}
     restart: unless-stopped
     profiles: ["oxigraph"]
     command: serve --location /data --bind 0.0.0.0:7878
@@ -126,7 +130,9 @@ services:
     environment:
       - STORE_CONTAINER=${STORE_CONTAINER:-koetai-platform-oxigraph-1}
       - STORE_VOLUME=${STORE_VOLUME:-koetai-platform_oxigraph-data}
-      - STORE_IMAGE=${STORE_IMAGE:-ghcr.io/oxigraph/oxigraph:latest}
+      # Must be the version the store itself runs: this opens that store's
+      # files directly, so a mismatch is two Oxigraph versions on one database.
+      - STORE_IMAGE=${STORE_IMAGE:-ghcr.io/oxigraph/oxigraph:${OXIGRAPH_VERSION:-0.5.11}}
       - ALLOWED_ROOT=/data/uploads
       # The loader sorts in memory — 9M triples measured at 4.1 GB — and runs
       # as its own container, outside any limit set on the services here.
