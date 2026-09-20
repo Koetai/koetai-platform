@@ -68,7 +68,7 @@ echo "$(ts) working volume: $VOL"
 if rssh "test -f $R/run.pid && kill -0 \$(cat $R/run.pid) 2>/dev/null"; then
   echo "$(ts) run already in progress on the VM, attaching"
 else
-  rssh -n "cd $R && rm -f status && WORKDIR=$WORKDIR BUILD_DIR=$BUILD_DIR GRAPH='$GRAPH' INDEX_NAME=$INDEX_NAME \
+  rssh -n "cd $R && rm -f status && GIT_COMMIT=$(git -C "$REPO" rev-parse --short HEAD) WORKDIR=$WORKDIR BUILD_DIR=$BUILD_DIR GRAPH='$GRAPH' INDEX_NAME=$INDEX_NAME \
     nohup setsid bash stages/remote_run.sh >> run.log 2>&1 < /dev/null & echo \$! > $R/run.pid; sleep 1; echo started" >/dev/null
   echo "$(ts) pipeline started on the VM (detached; safe to Ctrl-C and re-run to re-attach)"
 fi
@@ -94,7 +94,7 @@ done
 echo "$(ts) pulling RDF tarball back..."
 DEST="$EXPORTS/$(date -u +%Y%m%d)"; mkdir -p "$DEST/run-logs"
 TAR=$(rssh "ls $WORKDIR/bhl-rdf-*.tar | tail -1")
-scp -q "${SSH_OPTS[@]}" "$HOST:$TAR" "$HOST:$WORKDIR/bhl-rdf.tar.sha256" "$DEST/"
+scp -q "${SSH_OPTS[@]}" "$HOST:$TAR" "$HOST:$WORKDIR/bhl-rdf.tar.sha256" "$HOST:$WORKDIR/provenance.ttl" "$DEST/"
 scp -q "${SSH_OPTS[@]}" "$HOST:$R/run.log" "$DEST/run-logs/" || true
 scp -q "${SSH_OPTS[@]}" "$HOST:$BUILD_DIR/*index-log.txt" "$DEST/run-logs/" || true
 ( cd "$DEST" && sha256sum -c bhl-rdf.tar.sha256 ) || { echo "CHECKSUM MISMATCH — do not delete the VM"; exit 1; }

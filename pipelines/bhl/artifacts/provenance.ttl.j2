@@ -1,15 +1,34 @@
 @prefix prov: <http://www.w3.org/ns/prov#> .
 @prefix dcterms: <http://purl.org/dc/terms/> .
 @prefix schema: <https://schema.org/> .
+@prefix void: <http://rdfs.org/ns/void#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
 <> a prov:Activity, schema:CreativeWork ;
   dcterms:description "BHL TSV dump materialized to RDF via the Koetai bhl-pipeline" ;
-  dcterms:created "{{RUN_DATE}}"^^<http://www.w3.org/2001/XMLSchema#date> ;
+  dcterms:created "{{RUN_DATE}}"^^xsd:date ;
   prov:used [
     a prov:Entity ;
     dcterms:source <https://www.biodiversitylibrary.org/data/data.zip> ;
     dcterms:identifier "{{DUMP_CHECKSUM}}"
-  ] ;
-  schema:codeRepository <https://codeberg.org/andrawaag/koetai-platform> ;
+  ] , <https://www.wikidata.org/> ;
+  prov:used <https://github.com/Koetai/koetai-platform/blob/{{GIT_COMMIT}}/pipelines/bhl/artifacts/bhl-mapping.yarrrml.yml> ,
+            <https://github.com/Koetai/koetai-platform/blob/{{GIT_COMMIT}}/pipelines/bhl/artifacts/bhl-shape.shex> ,
+            <https://github.com/Koetai/koetai-platform/blob/{{GIT_COMMIT}}/pipelines/bhl/artifacts/reconcile-wikidata.rq> ;
+  prov:generated <{{GRAPH}}> ;
+  schema:softwareRequirements "Morph-KGC (RML/YARRRML), RUDOF 0.1.146 (ShEx validation), QLever 0.5.44" ;
+  schema:codeRepository <https://codeberg.org/andrawaag/koetai-platform> ,
+                        <https://github.com/Koetai/koetai-platform> ;
   dcterms:hasVersion "{{GIT_COMMIT}}" ;
   prov:wasAssociatedWith <https://koetai.semscape.org> .
+
+<{{GRAPH}}> a void:Dataset ;
+  void:triples {{TRIPLES}} ;
+  dcterms:conformsTo <https://github.com/Koetai/koetai-platform/blob/{{GIT_COMMIT}}/pipelines/bhl/artifacts/bhl-shape.shex> ;
+  schema:distribution [
+    a schema:DataDownload ;
+    schema:name "{{TARBALL}}" ;
+    schema:encodingFormat "application/x-tar" ;
+    schema:contentSize {{TARBALL_BYTES}} ;
+    schema:sha256 "{{TARBALL_SHA256}}"
+  ] .

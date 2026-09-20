@@ -21,13 +21,17 @@ ARTIFACTS_DIR = Path(__file__).resolve().parent.parent / "artifacts"
 ZENODO_API = "https://zenodo.org/api/deposit/depositions"
 
 
-def build_provenance(workdir: Path, git_commit: str, dump_checksum: str) -> str:
+def build_provenance(run_date: str, git_commit: str, dump_checksum: str, extra: dict) -> str:
     template = (ARTIFACTS_DIR / "provenance.ttl.j2").read_text()
-    return (
-        template.replace("{{RUN_DATE}}", date.today().isoformat())
-        .replace("{{GIT_COMMIT}}", git_commit)
-        .replace("{{DUMP_CHECKSUM}}", dump_checksum)
-    )
+    out = (template.replace("{{RUN_DATE}}", run_date)
+           .replace("{{GIT_COMMIT}}", git_commit)
+           .replace("{{DUMP_CHECKSUM}}", dump_checksum))
+    for k, v in extra.items():
+        out = out.replace("{{%s}}" % k, str(v))
+    if "{{" in out:
+        sys.exit("unfilled placeholders in provenance template: " + ", ".join(
+            sorted({t.split("}}")[0] for t in out.split("{{")[1:]})))
+    return out
 
 
 def main():
@@ -35,7 +39,29 @@ def main():
     ap.add_argument("workdir")
     ap.add_argument("--git-commit", default="unknown")
     ap.add_argument("--dump-checksum", default="unknown", help="sha256 of data.zip, for provenance")
+    ap.add_argument("--run-date", default=date.today().isoformat())
+    ap.add_argument("--graph", required=True)
+    ap.add_argument("--triples", required=True)
+    ap.add_argument("--tarball", required=True, help="path to the RDF tarball (size and sha256 are read from it / its .sha256)")
+    ap.add_argument("--local-only", action="store_true",
+                    help="only write provenance.ttl into the workdir; no Zenodo, no token needed")
     args = ap.parse_args()
+
+    import hashlib
+    tb = Path(args.tarball)
+    sha = hashlib.sha256()
+    with open(tb, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 24), b""):
+            sha.update(chunk)
+    extra = {"GRAPH": args.graph, "TRIPLES": args.triples, "TARBALL": tb.name,
+             "TARBALL_BYTES": tb.stat().st_size, "TARBALL_SHA256": sha.hexdigest()}
+    workdir = Path(args.workdir)
+    workdir.mkdir(parents=True, exist_ok=True)
+    provenance = build_provenance(args.run_date, args.git_commit, args.dump_checksum, extra)
+    (workdir / "provenance.ttl").write_text(provenance)
+    print(f"wrote {workdir / 'provenance.ttl'}")
+    if args.local_only:
+        return
 
     token = os.environ.get("ZENODO_TOKEN")
     if not token:
@@ -43,10 +69,6 @@ def main():
               "(zenodo.org -> Applications -> Personal access tokens) and re-run this stage.\n"
               "Nothing was sent to Zenodo.")
         sys.exit(1)
-
-    workdir = Path(args.workdir)
-    provenance = build_provenance(workdir, args.git_commit, args.dump_checksum)
-    (workdir / "provenance.ttl").write_text(provenance)
 
     auth = {"Authorization": f"Bearer {token}"}
 

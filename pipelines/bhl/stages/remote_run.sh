@@ -34,9 +34,16 @@ EXPECTED=$(grep -h "Statistics for PSO" "$BUILD_DIR"/*index-log.txt | tail -1 | 
 echo "$EXPECTED" > "$WORKDIR/expected-count"
 stage 06 bash stages/06_verify.sh "$WORKDIR" "$GRAPH" "$INDEX_NAME" "$EXPECTED"
 
-if [ -s "$HOME/.zenodo_token" ]; then
-  stage 07 env ZENODO_TOKEN="$(cat "$HOME/.zenodo_token")" "$PY" stages/07_package.py "$WORKDIR"
-fi
+# Provenance needs the tarball, so it follows stage 08. The dump checksum is
+# recorded from stage 01's copy of data.zip (kept until here).
 stage 08 bash stages/08_tarball.sh "$WORKDIR" bhl
+TAR=$(ls "$WORKDIR"/bhl-rdf-*.tar | tail -1)
+DUMP_SHA=$(sha256sum "$WORKDIR/data.zip" 2>/dev/null | cut -d' ' -f1 || true)
+PROV_ARGS=(--run-date "$(date -u +%F)" --git-commit "${GIT_COMMIT:-unknown}" \
+  --dump-checksum "${DUMP_SHA:-not retained}" --graph "$GRAPH" --triples "$EXPECTED" --tarball "$TAR")
+stage 07 "$PY" stages/07_package.py "$WORKDIR" --local-only "${PROV_ARGS[@]}"
+if [ -s "$HOME/.zenodo_token" ]; then
+  stage 07z env ZENODO_TOKEN="$(cat "$HOME/.zenodo_token")" "$PY" stages/07_package.py "$WORKDIR" "${PROV_ARGS[@]}"
+fi
 ( cd "$WORKDIR" && sha256sum bhl-rdf-*.tar | tee bhl-rdf.tar.sha256 )
 echo "done" > "$R/status"
