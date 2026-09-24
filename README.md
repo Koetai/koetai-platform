@@ -202,6 +202,35 @@ Optional — only for the shapes, reasoning and diagram features:
 - [RUDOF](https://github.com/rudof-project/rudof) installed as `/usr/bin/rudof`
 - Docker (for rdf-config)
 
+### Quick install (local, scripted)
+
+For a single-user install (`KOETAI_MODE=local`, no ORCID) via Docker, an
+interactive script does the whole `docker-compose.yml` setup for you: checks
+prerequisites, asks which triplestore to use (Oxigraph is the recommended
+default; Fuseki and "both" are also offered), picks a free port, clones the
+repo, and starts it. Source: [`scripts/install/`](scripts/install/).
+
+```bash
+# macOS
+curl -fsSL https://raw.githubusercontent.com/Koetai/koetai-platform/main/scripts/install/mac.sh -o install-koetai.sh
+chmod +x install-koetai.sh && ./install-koetai.sh
+
+# Linux
+curl -fsSL https://raw.githubusercontent.com/Koetai/koetai-platform/main/scripts/install/linux.sh -o install-koetai.sh
+chmod +x install-koetai.sh && ./install-koetai.sh
+```
+
+```powershell
+# Windows (PowerShell; Docker Desktop needs its WSL2 backend)
+iwr https://raw.githubusercontent.com/Koetai/koetai-platform/main/scripts/install/windows.ps1 -OutFile install-koetai.ps1
+powershell -ExecutionPolicy Bypass -File install-koetai.ps1
+```
+
+Each script only touches its own clone directory and `.env` — review before
+piping a downloaded script to a shell if that's not something you do by habit.
+For `community`/`internal` mode, or to run Koetai outside Docker, use the
+manual install below instead.
+
 ### Install
 
 ```bash
