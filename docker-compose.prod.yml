@@ -1,0 +1,109 @@
+# Production overlay — apply on top of docker-compose.yml:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+#                  --profile oxigraph up -d
+#
+# The base file is a single-user install on a laptop: it signs everyone in as one
+# local user, publishes the app on every interface, speaks plain HTTP and tracks
+# :latest. Each of those is wrong on a host with a public address, and this file
+# changes exactly those things — see deploy/README.md for the full walkthrough.
+services:
+
+  koetai:
+    # No published port. Caddy reaches the app over the compose network, so the
+    # app itself is not on the public interface at all. Without this, binding
+    # 0.0.0.0:3002 would leave an unencrypted copy of the site reachable beside
+    # the HTTPS one, whatever the firewall is meant to be doing.
+    ports: !reset []
+    environment:
+      # community: invitation-only, the public model. internal: an ORCID or
+      # email-domain allowlist, for a group hosting its own. Never local here —
+      # local signs every visitor in as the same user.
+      - KOETAI_MODE=${KOETAI_MODE:-community}
+      - BASE_URL=${BASE_URL:?BASE_URL must be your real https:// address}
+      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY must be set; generate a random one}
+      - ORCID_CLIENT_ID=${ORCID_CLIENT_ID:?required outside local mode}
+      - ORCID_CLIENT_SECRET=${ORCID_CLIENT_SECRET:?required outside local mode}
+      - ORCID_REDIRECT_URI=${ORCID_REDIRECT_URI:?required outside local mode}
+      # Who administers this instance. At least one is needed on a new install:
+      # registration is invitation-only, invitations are issued by an admin, and
+      # nothing else ever creates the first one.
+      - KOETAI_ADMIN_ORCIDS=${KOETAI_ADMIN_ORCIDS:?set your own ORCID to bootstrap}
+      - INTERNAL_ALLOWED_ORCIDS=${INTERNAL_ALLOWED_ORCIDS:-}
+      - INTERNAL_ALLOWED_DOMAINS=${INTERNAL_ALLOWED_DOMAINS:-}
+      - KOETAI_DB_PATH=/data/koetai.db
+      - UPLOAD_DIR=/data/uploads
+      - BULK_LOADER_DIR=/data/bulk-loader
+      - OXIGRAPH_URL=http://oxigraph:7878
+      - FUSEKI_BASE_URL=http://fuseki:3030
+      - FUSEKI_DATASET=${FUSEKI_DATASET:-koetai}
+      - FUSEKI_USER=${FUSEKI_USER:-admin}
+      - FUSEKI_PASSWORD=${FUSEKI_ADMIN_PASSWORD:?set a real Fuseki password}
+      - QLEVER_PLATFORM_URL=${QLEVER_PLATFORM_URL:-}
+      # Kept by default on a shared instance: a published dataset's source is
+      # part of what was published. Turn it off if disk is tighter than that.
+      - KEEP_UPLOADED_SOURCES=${KEEP_UPLOADED_SOURCES:-true}
+      - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-4096}
+      - RDF_LOAD_TIMEOUT=${RDF_LOAD_TIMEOUT:-7200}
+    deploy:
+      resources:
+        limits:
+          # A ceiling so the app cannot take the host down with it. The app is
+          # small — tens of MB — and loading streams rather than buffers.
+          memory: ${KOETAI_MEM_LIMIT:-1g}
+
+  fuseki:
+    # Opt-in in production. The base file starts Fuseki because a laptop install
+    # should hold your data without you having to choose an engine first; on a
+    # server you have chosen. An idle Fuseki is not free — the JVM claims its
+    # heap whether or not anything is stored, measured at 4.2 GB holding nothing,
+    # which on a 16 GB machine is a quarter of the RAM. Start it with
+    # `--profile fuseki` if you actually want Fuseki-backed datasets.
+    profiles: ["fuseki"]
+    environment:
+      - JVM_ARGS=-Xmx${FUSEKI_HEAP:-2g}
+      - ADMIN_PASSWORD=${FUSEKI_ADMIN_PASSWORD:?set a real Fuseki password}
+      - FUSEKI_DATASET_1=${FUSEKI_DATASET:-koetai}
+    deploy:
+      resources:
+        limits:
+          memory: ${FUSEKI_MEM_LIMIT:-3g}
+
+  oxigraph:
+    # Pinned. :latest is how you get an unattended upgrade into a store holding
+    # your data — and 0.5.8 through 0.5.10 shipped a real regression in graph
+    # scoping. 0.5.11 or later is required; see the README.
+    image: ghcr.io/oxigraph/oxigraph:${OXIGRAPH_VERSION:-0.5.11}
+    deploy:
+      resources:
+        limits:
+          # Oxigraph queries from disk and stays small; this is headroom for a
+          # load, not a working set. A limit turns a runaway load into one failed
+          # container rather than a host-wide out-of-memory kill, which is what
+          # took the store down here three times before loads were batched.
+          memory: ${OXIGRAPH_MEM_LIMIT:-6g}
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # HTTPS. Caddy gets certificates from Let's Encrypt on its own, provided the
+  # DNS for BASE_URL already points at this host and 80/443 are reachable.
+  # ───────────────────────────────────────────────────────────────────────────
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - KOETAI_DOMAIN=${KOETAI_DOMAIN:?the hostname Caddy should serve, e.g. koetai.example.org}
+    volumes:
+      - ./deploy/Caddyfile.prod:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data          # certificates: losing this means re-issuing
+      - caddy-config:/config
+    networks:
+      - koetai
+    depends_on:
+      - koetai
+
+volumes:
+  caddy-data:
+  caddy-config:
