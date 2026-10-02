@@ -49,6 +49,53 @@ def submit(dataset_id: int, user_id: int, file_path: Path, graph_uri: str,
     return job_id
 
 
+DELETE_KINDS = ("delete", "delete-force")
+
+
+def submit_delete(dataset_id: int, user_id: int, graph_base: str,
+                  force: bool = False) -> str:
+    """Queue the deletion of a dataset and return the job ID.
+
+    Deleting runs as a job because removing a large graph takes as long as
+    loading it did, and a request that waits for it outlives the browser's
+    patience long before it finishes. A dataset already being deleted returns
+    the job in hand rather than queueing a second one: every click used to start
+    another drop alongside the last.
+    """
+    conn = _raw_conn()
+    row = conn.execute(
+        "SELECT id FROM upload_jobs WHERE dataset_id=? AND kind IN (?,?) "
+        "AND status IN ('queued','running') ORDER BY created_at DESC LIMIT 1",
+        (dataset_id, *DELETE_KINDS)
+    ).fetchone()
+    if row:
+        conn.close()
+        return row["id"]
+    job_id = str(uuid.uuid4())
+    with conn:
+        conn.execute(
+            "INSERT INTO upload_jobs (id, dataset_id, user_id, file_path, graph_uri, kind) "
+            "VALUES (?,?,?,?,?,?)",
+            (job_id, dataset_id, user_id, "", graph_base,
+             "delete-force" if force else "delete")
+        )
+    conn.close()
+    _ensure_runner()
+    return job_id
+
+
+def latest_delete(dataset_id: int) -> dict | None:
+    """The most recent delete job for a dataset, or None if it was never asked."""
+    conn = _raw_conn()
+    row = conn.execute(
+        "SELECT id, status, phase, message, created_at FROM upload_jobs "
+        "WHERE dataset_id=? AND kind IN (?,?) ORDER BY created_at DESC LIMIT 1",
+        (dataset_id, *DELETE_KINDS)
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
 def get_status(job_id: str) -> dict | None:
     """Return job status dict or None if not found."""
     conn = _raw_conn()
@@ -88,6 +135,16 @@ def reclaim_orphaned() -> int:
     is the only way to know.
     """
     conn = _raw_conn()
+    # A delete is the exception: running it again is always safe, since it
+    # removes whatever is left and nothing twice, so it goes back in the queue
+    # rather than leaving the user to find it and ask again.
+    with conn:
+        conn.execute(
+            "UPDATE upload_jobs SET status='queued', phase='', "
+            "message='Restarted after an interruption' "
+            "WHERE status='running' AND kind IN (?,?)", DELETE_KINDS
+        )
+
     # Its working files are orphaned too: the cleanup that normally follows a
     # job lives in the process that died. The source is re-uploadable and the
     # extracted members are reproducible, so both go, as they would after any
@@ -135,6 +192,8 @@ def _next_queued() -> dict | None:
 
 
 def _process(job: dict):
+    if job.get("kind") in DELETE_KINDS:
+        return _process_delete(job)
     job_id    = job["id"]
     file_path = Path(job["file_path"])
     graph_uri = job["graph_uri"]
@@ -278,8 +337,12 @@ def _process(job: dict):
         def report(n):
             _set("running", "loading", f"Loaded {n:,} statements so far…")
 
+        def report_drain(n):
+            _set("running", "loading", f"Removing the previous data: {n:,} statements so far…")
+
         if replace:
-            ok, msg = ts.replace_graph(graph_uri, load_path, progress=report)
+            ok, msg = ts.replace_graph(graph_uri, load_path, progress=report,
+                                       drain_progress=report_drain)
         else:
             ok, msg = ts.load_rdf_file(graph_uri, load_path, progress=report)
 
@@ -301,6 +364,82 @@ def _process(job: dict):
         _set("error", "error", str(e))
 
 
+
+
+def _process_delete(job: dict):
+    """Remove a dataset's graphs from its store, then the dataset itself.
+
+    The data goes before the row that records where it lives: a failure stops
+    here with the row kept, so the dataset can be deleted again rather than its
+    triples being orphaned with nothing left naming them. A forced delete
+    ("delete-force", for a store retired for good) removes the row regardless.
+    The row's removal cascades to this job's own row, so a finished delete
+    leaves no job behind; its absence is how the page knows it is done.
+    """
+    from services import triplestore
+
+    job_id = job["id"]
+
+    def _set(status, phase, message):
+        conn = _raw_conn()
+        with conn:
+            conn.execute(
+                "UPDATE upload_jobs SET status=?, phase=?, message=?, "
+                "finished_at=CASE WHEN ? IN ('done','error') THEN datetime('now') END "
+                "WHERE id=?", (status, phase, message, status, job_id))
+        conn.close()
+
+    conn = _raw_conn()
+    ds = conn.execute("SELECT * FROM datasets WHERE id=?", (job["dataset_id"],)).fetchone()
+    conn.close()
+    if ds is None:
+        return
+    ds = dict(ds)
+
+    try:
+        ts = triplestore.get(ds)
+        failed = []
+        for suffix in triplestore.GRAPH_SUFFIXES:
+            graph = ds["graph_base"] + suffix
+
+            def report(n, graph=graph):
+                _set("running", "deleting", f"Removing <{graph}>: {n:,} statements so far…")
+
+            _set("running", "deleting", f"Removing <{graph}>…")
+            ok, msg = ts.drop_graph(graph, progress=report)
+            if not ok:
+                failed.append(f"{graph}: {msg}")
+    except Exception as e:
+        failed = [str(e)]
+
+    if failed and job.get("kind") != "delete-force":
+        _set("error", "deleting",
+             "Could not remove this dataset's data from the triplestore, so "
+             "nothing was deleted. " + "; ".join(failed)[:400])
+        return
+
+    remove_upload_dir(ds)
+    conn = _raw_conn()
+    with conn:
+        conn.execute("DELETE FROM datasets WHERE id=?", (ds["id"],))
+    conn.close()
+
+
+def remove_upload_dir(ds):
+    """Delete the dataset's uploaded source files along with the dataset.
+
+    Deleting a dataset used to drop its graphs and its database row and leave
+    every file that had ever been uploaded to it on disk, unreferenced and
+    invisible — the only trace being a directory named after a slug that no
+    longer existed.
+    """
+    target = (config.UPLOAD_DIR / str(ds["user_id"]) / ds["slug"]).resolve()
+    root   = config.UPLOAD_DIR.resolve()
+    # A slug is constrained at creation, but resolve-and-check is cheap and this
+    # is an rmtree.
+    if root not in target.parents or not target.is_dir():
+        return
+    shutil.rmtree(target, ignore_errors=True)
 
 
 def _release_source(path: Path, loaded: bool):

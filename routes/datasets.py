@@ -1,7 +1,6 @@
 """Dataset view, RDF upload, SPARQL proxy."""
 import json
 import os
-import shutil
 import uuid
 from pathlib import Path
 from flask import (Blueprint, render_template, request, redirect,
@@ -76,6 +75,7 @@ def view(owner_orcid=None, slug=None):
     git_count    = db.execute("SELECT COUNT(*) FROM github_sources WHERE dataset_id=?", (ds["id"],)).fetchone()[0]
     web_count    = db.execute("SELECT COUNT(*) FROM web_sources WHERE dataset_id=?", (ds["id"],)).fetchone()[0]
     return render_template("dataset.html", ds=ds,
+                           delete_job=job_runner.latest_delete(ds["id"]),
                            shape_count=shape_count,
                            source_counts={"git": git_count, "web": web_count})
 
@@ -353,22 +353,6 @@ def sparql_endpoint(owner_orcid, slug):
 
 
 
-def _remove_upload_dir(ds):
-    """Delete the dataset's uploaded source files along with the dataset.
-
-    Deleting a dataset used to drop its graphs and its database row and leave
-    every file that had ever been uploaded to it on disk, unreferenced and
-    invisible — the only trace being a directory named after a slug that no
-    longer existed.
-    """
-    target = (config.UPLOAD_DIR / str(ds["user_id"]) / ds["slug"]).resolve()
-    root   = config.UPLOAD_DIR.resolve()
-    # A slug is constrained at creation, but resolve-and-check is cheap and this
-    # is an rmtree.
-    if root not in target.parents or not target.is_dir():
-        return
-    shutil.rmtree(target, ignore_errors=True)
-
 
 @bp.route("/<owner_orcid>/<slug>/delete", methods=["POST"])
 @login_required
@@ -378,39 +362,12 @@ def delete(owner_orcid, slug):
         flash("Not found or not authorized.", "error")
         return redirect(url_for("dashboard.index"))
 
-    # Drop the data before the row that records where it lives. A failure here
-    # used to be discarded, so a dataset whose backend was slow or down lost its
-    # row and kept its triples — orphaned in the store with nothing left naming
-    # them. Stop instead, unless the user has explicitly chosen to go ahead:
-    # a store that is briefly down should be waited for, but one that has been
-    # retired for good would otherwise make its datasets undeletable.
+    # The drop runs as a background job (see job_runner._process_delete): on a
+    # large dataset it takes as long as the load did, and a request waiting for
+    # it was abandoned by the browser while the store carried on. `force` is the
+    # second step offered when a delete has failed, for a store retired for good.
     force = request.form.get("force") == "1"
-    ts = triplestore.get(ds)
-    failed = []
-    for suffix in triplestore.GRAPH_SUFFIXES:
-        ok, msg = ts.drop_graph(ds["graph_base"] + suffix)
-        if not ok:
-            failed.append(f"{ds['graph_base']}{suffix}: {msg}")
-
-    if failed and not force:
-        flash("Could not remove this dataset's data from the triplestore, so "
-              "nothing was deleted. " + "; ".join(failed)[:400], "error")
-        return redirect(url_for("datasets.view", owner_orcid=owner_orcid,
-                                slug=slug, undeletable=1))
-
-    _remove_upload_dir(ds)
-
-    db = get_db()
-    db.execute("DELETE FROM datasets WHERE id = ?", (ds["id"],))
-    db.commit()
-    if failed:
-        # Deleted on the user's say-so with the data still in the store. Name the
-        # graphs: this row was the only record of where they are.
-        flash(f"Dataset '{ds['label']}' deleted, but its data could not be "
-              f"removed from the triplestore and is still there. Clean up by "
-              f"hand if the store comes back: "
-              + ", ".join(ds["graph_base"] + sfx for sfx in triplestore.GRAPH_SUFFIXES),
-              "warning")
-    else:
-        flash(f"Dataset '{ds['label']}' deleted.", "success")
+    job_runner.submit_delete(ds["id"], current_user.id, ds["graph_base"], force=force)
+    flash(f"Deleting '{ds['label']}'. A large dataset takes a while; it leaves "
+          f"this list when it is gone.", "info")
     return redirect(url_for("dashboard.index"))

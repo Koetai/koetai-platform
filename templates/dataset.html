@@ -41,7 +41,8 @@
     <p class="small text-muted mt-2 mb-0"><i class="bi bi-link-45deg"></i> <code>{{ ds.graph_base }}/data</code></p>
     {% endif %}
   </div>
-  {% if current_user.is_authenticated and current_user.id == ds.user_id %}
+  {% set _deleting = delete_job and delete_job.status in ('queued', 'running') %}
+  {% if current_user.is_authenticated and current_user.id == ds.user_id and not _deleting %}
   <div class="col-md-4 text-md-end mt-2">
     <form method="post" action="{{ url_for('datasets.delete', owner_orcid=ds.orcid_id, slug=ds.slug) }}"
           onsubmit="return confirm('Delete this dataset and all its data?')">
@@ -53,17 +54,29 @@
 
 {{ ds_nav(ds, 'overview') }}
 
-{# Shown only after a delete was refused because the store could not be reached.
+{% if _deleting %}
+<div class="alert alert-info" id="deleteProgress" data-job="{{ delete_job.id }}">
+  <i class="bi bi-hourglass-split"></i>
+  <strong>This dataset is being deleted.</strong>
+  <span id="deleteMessage">{{ delete_job.message or 'Waiting to start…' }}</span>
+  <div class="small text-muted mt-1">A large dataset is removed in batches and can
+    take a while. You can leave this page; it carries on without it.</div>
+</div>
+{% endif %}
+
+{# Shown only after a delete failed because the store could not remove the data.
    The second step is deliberate: it destroys the record of where the data is,
    so it should not be reachable by mis-clicking the ordinary delete button. #}
-{% if request.args.get('undeletable') and current_user.is_authenticated and current_user.id == ds.user_id %}
+{% if delete_job and delete_job.status == 'error' and current_user.is_authenticated and current_user.id == ds.user_id %}
 <div class="alert alert-warning">
   <p class="mb-2">
     <i class="bi bi-exclamation-triangle"></i>
     <strong>This dataset could not be deleted</strong> because its triplestore
-    ({{ ds.platform }}) did not respond. If the store is only temporarily down,
-    wait and delete again — that removes the data properly.
+    ({{ ds.platform }}) could not remove the data. If the store is only
+    temporarily down, wait and delete again — that removes the data properly,
+    carrying on from wherever the last attempt stopped.
   </p>
+  <p class="mb-2 small text-muted">{{ delete_job.message }}</p>
   <p class="mb-2 small">
     If the store is gone for good, you can delete the dataset anyway. Any triples
     it holds will stay in that store, and this page is the only record of where
@@ -135,6 +148,28 @@
 {% endblock %}
 
 {% block scripts %}
+{% if delete_job and delete_job.status in ('queued', 'running') %}
+<script>
+// Follow a delete in progress. The job row goes with the dataset, so a 404 is
+// the delete finishing, and an error status needs the page's failure warning.
+(function () {
+  const box = document.getElementById('deleteProgress');
+  const url = '{{ url_for("datasets.upload_status", owner_orcid=ds.orcid_id, slug=ds.slug, job_id="__JOB__") }}'
+                .replace('__JOB__', box.dataset.job);
+  async function poll() {
+    try {
+      const r = await fetch(url);
+      if (r.status === 404) { location.href = '{{ url_for("dashboard.index") }}'; return; }
+      const j = await r.json();
+      if (j.status === 'error') { location.reload(); return; }
+      if (j.message) document.getElementById('deleteMessage').textContent = j.message;
+    } catch (e) { /* transient; try again */ }
+    setTimeout(poll, 3000);
+  }
+  setTimeout(poll, 3000);
+})();
+</script>
+{% endif %}
 {% if ds.platform != 'comunica' %}
 <script>
 // The page no longer waits on COUNT(*). Ask for it once the page is up and fill
