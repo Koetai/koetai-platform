@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% from '_ds_nav.html' import ds_nav with context %}
+{% block title %}Browse — {{ ds.label }}{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='miller-browser/css/miller.css') }}">
+<style>
+  /* The browser fills whatever box it is given; leave room for the nav. */
+  #browser { height: 75vh; border: 1px solid #dee2e6; border-radius: .375rem; }
+</style>
+{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">My Datasets</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('datasets.view', owner_orcid=ds.orcid_id, slug=ds.slug) }}">{{ ds.label }}</a></li>
+    <li class="breadcrumb-item active">Browse</li>
+  </ol>
+</nav>
+{{ ds_nav(ds, 'browse') }}
+
+<div id="browser"></div>
+{% endblock %}
+{% block scripts %}
+<script type="module">
+  import { mount } from "{{ url_for('static', filename='miller-browser/js/browser.js') }}";
+
+  const options = {
+    endpoint: {
+      url: {{ url_for('datasets.sparql_endpoint', owner_orcid=ds.orcid_id, slug=ds.slug) | tojson }},
+      name: {{ ds.label | tojson }},
+    },
+    urlState: 'search',
+    urlParam: 'trail',
+    theme: 'light',
+  };
+  const tiles = {{ tiles | tojson }};
+  if (tiles) options.tiles = tiles;
+
+  mount(document.getElementById('browser'), options);
+</script>
+{% endblock %}

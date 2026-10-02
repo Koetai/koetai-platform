@@ -3,7 +3,7 @@
   Import WITH context so current_user is available:
     {% from '_ds_nav.html' import ds_nav with context %}
   Usage: {{ ds_nav(ds, 'upload') }}
-  active: overview | upload | sparql | examples | shapes | api | git | web
+  active: overview | upload | sparql | browse | examples | shapes | api | git | web
           | fdp | void | fdp-meta   (the last three live under the Metadata menu)
 #}
 {% set _meta_active = ['fdp', 'void', 'fdp-meta'] %}
@@ -25,6 +25,12 @@
     <a class="nav-link {% if active == 'sparql' %}active{% endif %}"
        href="{{ url_for('datasets.sparql_endpoint', owner_orcid=ds.orcid_id, slug=ds.slug) }}">
       <i class="bi bi-braces"></i> SPARQL
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if active == 'browse' %}active{% endif %}"
+       href="{{ url_for('datasets.browse', owner_orcid=ds.orcid_id, slug=ds.slug) }}">
+      <i class="bi bi-layout-three-columns"></i> Browse
     </a>
   </li>
   <li class="nav-item">

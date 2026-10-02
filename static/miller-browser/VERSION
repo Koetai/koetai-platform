@@ -1,0 +1,5 @@
+Vendored copy of miller-browser (https://github.com/rdmpage/miller-browser)
+Tag:    v0.1.3
+Commit: c3a3a8376db5209c5d01a33e2f66a8ce7b771462
+Files:  js/*.js (except demo.js), css/miller.css. Do not edit here; change
+        upstream, tag a release, then re-vendor.

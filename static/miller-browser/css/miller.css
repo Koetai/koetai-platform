@@ -1,0 +1,439 @@
+/* miller-browser: every rule is scoped under .miller (the element passed to
+   mount()), so the browser can sit inside another site's page. Colours and
+   column widths are custom properties on .miller; override them there.
+   Cards are lifted by shadow rather than outlined; SlateBlue for links, a
+   pale sky blue for the current path. */
+.miller {
+  --bg: #ffffff;
+  --panel: #ffffff;
+  --ink: #1d2330;
+  --muted: #5d6878;
+  --line: #dde4ee;
+  --faint-line: rgba(0, 0, 0, 0.04);
+  --accent: #6a5acd;
+  --accent-ink: #ffffff;
+  --selected: #e3f1fc;
+  --shadow: 0 1px 3px rgba(20, 30, 50, 0.12), 0 2px 8px rgba(20, 30, 50, 0.06);
+  --error: #a3261b;
+  --col-w: 300px;
+  --short-w: 220px;
+  --card-w: 380px;
+  --map-w: 640px;
+  font-family: "Helvetica Neue", Arial, sans-serif;
+  font-size: 14px;
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg);
+  container: miller / inline-size;
+}
+
+/* Dark: follows the system unless the host forces a theme with
+   data-theme="light" or "dark" on the root element. */
+@media (prefers-color-scheme: dark) {
+  .miller:not([data-theme="light"]) {
+    --bg: #12161d;
+    --panel: #1b212b;
+    --ink: #e6ebf2;
+    --muted: #97a3b4;
+    --line: #2c3544;
+    --faint-line: rgba(255, 255, 255, 0.05);
+    --accent: #a99df2;
+    --accent-ink: #151226;
+    --selected: #243449;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+    --error: #ff8a7a;
+  }
+
+}
+
+.miller[data-theme="dark"] {
+  --bg: #12161d;
+  --panel: #1b212b;
+  --ink: #e6ebf2;
+  --muted: #97a3b4;
+  --line: #2c3544;
+  --faint-line: rgba(255, 255, 255, 0.05);
+  --accent: #a99df2;
+  --accent-ink: #151226;
+  --selected: #243449;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+  --error: #ff8a7a;
+}
+
+.miller, .miller * { box-sizing: border-box; }
+
+.miller select, .miller input, .miller button { font: inherit; color: inherit; }
+
+.miller select, .miller input[type="search"] {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+
+/* ---------- columns ---------- */
+.miller .columns {
+  flex: 1;
+  display: flex;
+  align-items: stretch;
+  padding: 0 8px 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  min-height: 0;
+}
+
+.miller .column {
+  flex: 0 0 var(--col-w);
+  width: var(--col-w);
+  margin: 0 8px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  scroll-snap-align: start;
+}
+
+/* Lists (and the start column) sit in a bordered panel... */
+.miller .column.list, .miller .column.start {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+/* A list panel is only as tall as its contents (scrolling once it reaches
+   the bottom), and a list of a few items is also narrower. */
+.miller .column.list {
+  align-self: flex-start;
+  max-height: 100%;
+}
+
+.miller .column.list .col-body { padding-bottom: 4px; }
+
+.miller .column.list.short { flex-basis: var(--short-w); width: var(--short-w); }
+
+/* Map view: the same list column, widened and full height. */
+.miller .column.list.map-view {
+  flex-basis: var(--map-w);
+  width: var(--map-w);
+  align-self: stretch;
+}
+
+.miller .map-view .col-body { display: flex; flex-direction: column; }
+
+.miller .map-wrap { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: 0 12px 12px; }
+
+.miller .map-wrap .status { padding: 0 0 6px; }
+
+.miller .map-box {
+  flex: 1;
+  min-height: 320px;
+  border-radius: 6px;
+  box-shadow: var(--shadow);
+}
+
+/* List | Map switch in a list's header. */
+.miller .views {
+  display: inline-flex;
+  margin-top: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.miller .views[hidden] { display: none; }
+
+.miller .views button {
+  border: 0;
+  background: var(--panel);
+  padding: 3px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.miller .views button + button { border-left: 1px solid var(--line); }
+
+.miller .views button.on { background: var(--selected); color: var(--ink); font-weight: 600; }
+
+/* ...while a card column is just the card, floating on the ground. */
+.miller .column.card-col { flex-basis: var(--card-w); width: var(--card-w); }
+
+.miller .col-head {
+  padding: 12px 14px 10px;
+}
+
+.miller .col-head h2 {
+  font-size: 16px;
+  line-height: 1.3;
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.miller .col-kind {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.miller .col-kind .badge { text-transform: none; letter-spacing: 0; }
+
+.miller .col-kind .note { text-transform: none; letter-spacing: 0; }
+
+.miller .col-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 2px 0 16px;
+}
+
+.miller .card-col .col-body { padding: 0 4px 16px; }
+
+.miller h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 14px 14px 6px;
+}
+
+/* ---------- the entity card ---------- */
+.miller .entity {
+  background: var(--panel);
+  border: 1px solid var(--faint-line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 18px 20px 20px;
+  margin: 4px 4px 0;
+}
+
+.miller .entity h2 {
+  font-size: 17px;
+  line-height: 1.3;
+  margin: 6px 0 2px;
+  overflow-wrap: anywhere;
+}
+
+.miller .type-chip {
+  color: var(--accent);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0 6px;
+  text-decoration: none;
+}
+
+.miller .type-chip:hover { border-color: var(--accent); }
+
+.miller .iri {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 11px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+
+.miller .iri:hover { color: var(--accent); }
+
+.miller .thumb {
+  display: block;
+  max-width: 100%;
+  max-height: 320px;
+  margin: 4px 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+.miller .fields dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: minmax(70px, 34%) 1fr;
+  gap: 6px 12px;
+  line-height: 1.4;
+}
+
+.miller .fields dt {
+  color: var(--muted);
+  font-size: 12px;
+  padding-top: 1px;
+  overflow-wrap: anywhere;
+}
+
+.miller .fields dd {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  min-width: 0;
+}
+
+.miller .val { overflow-wrap: anywhere; }
+
+.miller .val sup { color: var(--muted); margin-left: 2px; }
+
+.miller .val-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  color: var(--accent);
+}
+
+.miller .val-link:hover { text-decoration: underline; }
+
+.miller .val-link.active { text-decoration: underline; font-weight: 600; }
+
+/* Aggregated links: outlined buttons with a count badge. */
+.miller .links {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.miller .links .group { display: flex; flex-direction: column; gap: 6px; }
+
+.miller .links .group + .group { margin-top: 6px; }
+
+.miller .links .status { padding: 2px 0; }
+
+.miller .link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  text-align: left;
+  cursor: pointer;
+}
+
+.miller .link .row-main { font-weight: 600; color: var(--accent); }
+
+.miller .link:hover { border-color: var(--accent); }
+
+.miller .link.active { background: var(--selected); }
+
+.miller .badge {
+  flex: none;
+  min-width: 26px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- list items: small cards ---------- */
+.miller .item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: calc(100% - 24px);
+  margin: 0 12px 10px;
+  padding: 11px 14px;
+  border: 1px solid var(--faint-line);
+  border-radius: 6px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  text-align: left;
+  cursor: pointer;
+}
+
+.miller .item:hover { box-shadow: 0 1px 3px rgba(20, 30, 50, 0.16), 0 4px 12px rgba(20, 30, 50, 0.1); }
+
+.miller .item.active { background: var(--selected); }
+
+.miller .item .badge { background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
+
+.miller .item-thumb {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 4px;
+  background: var(--line);
+}
+
+.miller .row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+
+.miller .row-main { overflow-wrap: anywhere; line-height: 1.3; }
+
+.miller .item .row-main {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.miller .row-sub {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- misc ---------- */
+.miller .search { padding: 0 12px 4px; }
+
+.miller .search input { width: 100%; }
+
+.miller .status {
+  padding: 6px 14px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.miller .status.loading::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: miller-pulse 1s ease-in-out infinite;
+}
+
+.miller .status.error { color: var(--error); }
+
+.miller .fields .status { padding: 2px 0; }
+
+@keyframes miller-pulse { 50% { opacity: 0.2; } }
+
+.miller .more {
+  border: 1px solid var(--line);
+  background: var(--bg);
+  border-radius: 6px;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.miller .foot { padding: 4px 12px; }
+
+.miller .foot .status { padding: 0; }
+
+/* Narrow: each column fills the browser's own width (not the window's, so
+   this also works when embedded in a narrow container). */
+@container miller (max-width: 640px) {
+  .miller .columns {
+    --col-w: calc(100cqw - 48px);
+    --short-w: calc(100cqw - 48px);
+    --card-w: calc(100cqw - 48px);
+    --map-w: calc(100cqw - 48px);
+    scroll-snap-type: x mandatory;
+  }
+
+}
