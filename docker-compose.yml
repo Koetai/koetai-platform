@@ -95,6 +95,16 @@ services:
     restart: unless-stopped
     profiles: ["oxigraph"]
     command: serve --location /data --bind 0.0.0.0:7878
+    # RocksDB keeps every data file (*.sst) open, and a store built by bulk
+    # loads has thousands of them. Recent Docker gives containers a soft limit
+    # of 1024 open files, past which every read fails with "Too many open
+    # files": the store answers small queries and then fails the first one
+    # that touches enough of the data, which is how a delete of a large
+    # dataset first showed it.
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     expose:
       - "7878"
     volumes:
