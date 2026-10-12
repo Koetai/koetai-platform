@@ -37,6 +37,11 @@ POLL_SECONDS="${POLL_SECONDS:-3}"
 # exactly what the caps elsewhere exist to prevent. Failing one load beats
 # losing the machine.
 LOADER_MEMORY="${LOADER_MEMORY:-6g}"
+# Same reason for the open-file limit: RocksDB holds every SST file open, a
+# bulk-loaded store has thousands, and Docker's default soft limit of 1024 makes
+# the clear, load and optimise steps fail with "Too many open files". Matches
+# the oxigraph service's ulimits in docker-compose.yml.
+LOADER_NOFILE="${LOADER_NOFILE:-65536}"
 
 mkdir -p "$REQ_DIR" "$RES_DIR"
 echo "loader-agent: watching $REQ_DIR for $STORE_CONTAINER (volume $STORE_VOLUME)"
@@ -95,7 +100,7 @@ process() {
   # the graph is left empty. The UI says so before it starts.
   if [ "$replace" = "true" ]; then
     echo "loader-agent: $id clearing $graph before loading"
-    if ! docker run --rm --memory "$LOADER_MEMORY" -v "$STORE_VOLUME":/store \
+    if ! docker run --rm --memory "$LOADER_MEMORY" --ulimit nofile="$LOADER_NOFILE:$LOADER_NOFILE" -v "$STORE_VOLUME":/store \
            --entrypoint /usr/local/bin/oxigraph "$STORE_IMAGE" \
            update --location /store -u "DROP SILENT GRAPH <$graph>" \
            >>"$RES_DIR/$id.log" 2>&1; then
@@ -109,13 +114,13 @@ process() {
   # is a copy worth not making.
   set +e
   case "$real" in
-    *.gz)  gzip -dc "$real" | docker run --rm -i --memory "$LOADER_MEMORY" -v "$STORE_VOLUME":/store \
+    *.gz)  gzip -dc "$real" | docker run --rm -i --memory "$LOADER_MEMORY" --ulimit nofile="$LOADER_NOFILE:$LOADER_NOFILE" -v "$STORE_VOLUME":/store \
              --entrypoint /usr/local/bin/oxigraph "$STORE_IMAGE" \
              load --location /store --format "$format" --graph "$graph" 2>"$RES_DIR/$id.log" ;;
-    *.bz2) bzip2 -dc "$real" | docker run --rm -i --memory "$LOADER_MEMORY" -v "$STORE_VOLUME":/store \
+    *.bz2) bzip2 -dc "$real" | docker run --rm -i --memory "$LOADER_MEMORY" --ulimit nofile="$LOADER_NOFILE:$LOADER_NOFILE" -v "$STORE_VOLUME":/store \
              --entrypoint /usr/local/bin/oxigraph "$STORE_IMAGE" \
              load --location /store --format "$format" --graph "$graph" 2>"$RES_DIR/$id.log" ;;
-    *)     docker run --rm -i --memory "$LOADER_MEMORY" -v "$STORE_VOLUME":/store \
+    *)     docker run --rm -i --memory "$LOADER_MEMORY" --ulimit nofile="$LOADER_NOFILE:$LOADER_NOFILE" -v "$STORE_VOLUME":/store \
              --entrypoint /usr/local/bin/oxigraph "$STORE_IMAGE" \
              load --location /store --format "$format" --graph "$graph" \
              < "$real" 2>"$RES_DIR/$id.log" ;;
@@ -132,7 +137,7 @@ process() {
     echo "loader-agent: $id optimising the store"
     printf '{"id":"%s","status":"running","message":"optimising the store","started":"%s"}\n' \
       "$id" "$started" > "$RES_DIR/$id.json"
-    docker run --rm --memory "$LOADER_MEMORY" -v "$STORE_VOLUME":/store --entrypoint /usr/local/bin/oxigraph \
+    docker run --rm --memory "$LOADER_MEMORY" --ulimit nofile="$LOADER_NOFILE:$LOADER_NOFILE" -v "$STORE_VOLUME":/store --entrypoint /usr/local/bin/oxigraph \
       "$STORE_IMAGE" optimize --location /store >>"$RES_DIR/$id.log" 2>&1 \
       || echo "loader-agent: $id optimise failed (the load itself was fine)"
   fi
