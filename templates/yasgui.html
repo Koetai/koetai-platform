@@ -186,7 +186,9 @@ function renderResults(text, wrap, elapsed, info) {
       if (!cell) return '<td class="text-muted">—</td>';
       const val  = escHtml(cell.value);
       const type = cell.type;
-      if (type === 'uri') {
+      // IRIs, and literals whose whole value is a URL (e.g. "https://…" or
+      // xsd:anyURI), are both worth following (issue #19).
+      if (type === 'uri' || isUrl(cell.value)) {
         return `<td><a href="${val}" target="_blank" rel="noopener" class="text-break">${val}</a></td>`;
       }
       const lang = cell['xml:lang'] ? `<span class="badge bg-light text-dark ms-1">@${cell['xml:lang']}</span>` : '';
@@ -222,6 +224,10 @@ function downloadCSV() {
   const a = Object.assign(document.createElement('a'),
     { href: URL.createObjectURL(blob), download: 'results.csv' });
   a.click();
+}
+
+function isUrl(s) {
+  return /^https?:\/\/[^\s<>"]+$/i.test(String(s));
 }
 
 function escHtml(s) {
