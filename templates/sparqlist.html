@@ -120,6 +120,10 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('[id^="form-"]').forEach(f => updateUrl(f.id.replace('form-', '')));
 });
 
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
 async function callApi(qSlug) {
   const el     = document.getElementById('api-result-' + qSlug);
   const form   = document.getElementById('form-' + qSlug);
@@ -132,9 +136,20 @@ async function callApi(qSlug) {
     if (Array.isArray(d) && d.length) {
       const cols = Object.keys(d[0]);
       let html = '<table class="table table-sm table-bordered"><thead><tr>' +
-        cols.map(c=>`<th>${c}</th>`).join('') + '</tr></thead><tbody>';
+        cols.map(c=>`<th>${esc(c)}</th>`).join('') + '</tr></thead><tbody>';
       for (const row of d.slice(0,50))
-        html += '<tr>' + cols.map(c=>`<td>${row[c] ?? ''}</td>`).join('') + '</tr>';
+        html += '<tr>' + cols.map(c => {
+          const v = row[c];
+          if (v == null) return '<td></td>';
+          const s = esc(String(v));
+          // _format=simple flattens SPARQL bindings to plain values, so there
+          // is no {type:'uri'} to key off (unlike sparql_editor.html) — a
+          // string shaped like a URL is the only signal left, and this
+          // output is mostly IRIs (dataset/person/identifier links).
+          return /^https?:\/\/\S+$/i.test(v)
+            ? `<td><a href="${s}" target="_blank" rel="noopener">${s}</a></td>`
+            : `<td>${s}</td>`;
+        }).join('') + '</tr>';
       html += '</tbody></table>';
       if (d.length > 50) html += `<small class="text-muted">Showing 50 of ${d.length}</small>`;
       el.innerHTML = html;
