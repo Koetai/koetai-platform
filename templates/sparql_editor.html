@@ -235,6 +235,10 @@ async function runQuery() {
   btn.innerHTML = '<i class="bi bi-play-fill"></i> Run';
 }
 
+function isUrl(s) {
+  return /^https?:\/\/[^\s<>"]+$/i.test(String(s));
+}
+
 function renderResults(text, wrap, elapsed, info) {
   let data;
   try { data = JSON.parse(text); } catch {
@@ -262,7 +266,9 @@ function renderResults(text, wrap, elapsed, info) {
       const cell = row[v];
       if (!cell) return '<td class="text-muted">—</td>';
       const val = esc(cell.value);
-      if (cell.type === 'uri')
+      // IRIs, and literals whose whole value is a URL (e.g. "https://…" or
+      // xsd:anyURI), are both worth following (issue #19).
+      if (cell.type === 'uri' || isUrl(cell.value))
         return `<td><a href="${val}" target="_blank" rel="noopener">${val}</a></td>`;
       const lang = cell['xml:lang'] ? ` <span class="badge bg-light text-dark">@${cell['xml:lang']}</span>` : '';
       return `<td>${val}${lang}</td>`;
