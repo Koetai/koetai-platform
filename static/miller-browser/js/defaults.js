@@ -46,6 +46,15 @@ export const DEFAULTS = {
     'http://schema.org/ImageObject': { properties: ['http://schema.org/contentUrl', 'http://schema.org/url'] },
   },
 
+  // Properties linking an entity to a small picture of itself, in order of
+  // preference. Lists show the first as a thumbnail, and cards show their
+  // values as pictures rather than URLs. A lens can add more in front.
+  thumbnailProperties: [
+    'https://schema.org/thumbnailUrl',
+    'http://schema.org/thumbnailUrl',
+    'http://xmlns.com/foaf/0.1/thumbnail',
+  ],
+
   // How an entity can carry a point, for the map view: WKT literals, or
   // latitude/longitude pairs.
   geo: {

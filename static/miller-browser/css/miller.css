@@ -276,6 +276,14 @@
 
 .miller .val sup { color: var(--muted); margin-left: 2px; }
 
+.miller .val-img img {
+  display: block;
+  max-width: 100%;
+  max-height: 200px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
 .miller .val-link {
   border: 0;
   background: none;

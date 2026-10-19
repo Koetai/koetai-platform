@@ -258,8 +258,8 @@ GROUP BY ?x ORDER BY ?k ?x LIMIT ${size} OFFSET ${offset}`;
         label: labelFrom(x, m, this.lens),
         types,
         summary,
-        // A thumbnail only when the item is itself a picture.
-        image: this.lens.isImage(types) ? this.lens.imageFor(x, types, m) : null,
+        // The item's own picture, or a thumbnail property's value.
+        image: this.lens.thumbnailFor(x, types, m),
       });
     }
     return result;

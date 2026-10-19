@@ -334,7 +334,12 @@ export function mount(root, options = {}) {
   // with that date (`p` is null for lens path fields, which cannot pivot). An
   // IRI (a link to a resource with no type, such as sameAs) opens its card.
   // How to mark internal vs external links is still an open question.
+  // Thumbnail property values are shown as the picture, linking to it.
   function valueEl(p, o, index) {
+    if (p && state.lens.isThumbnailProperty(p) && /^https?:\/\//.test(o.value)) {
+      return $('a', { class: 'val val-img', href: o.value, target: '_blank', rel: 'noopener', title: o.value },
+        $('img', { src: o.value, alt: '', loading: 'lazy', decoding: 'async' }));
+    }
     if (o.type === 'uri') {
       const step = { k: 'card', iri: o.value };
       return $('button', { class: 'val val-link', type: 'button', 'data-step': stepKey(step), onclick: () => go(index, [step]) }, shortIri(o.value));

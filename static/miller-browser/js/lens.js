@@ -17,6 +17,7 @@ export class Lens {
     // Lens label properties come first, then the endpoint defaults.
     this.labelProperties = [...new Set([...(json.labelProperties || []).map(r), ...(defaults.labelProperties || [])])];
     this.imageTypes = new Map(Object.entries(defaults.imageTypes || {}));
+    this.thumbnailProperties = [...new Set([...(json.thumbnailProperties || []).map(x), ...(defaults.thumbnailProperties || [])])];
     this.predicateLabels = new Map(Object.entries(json.predicateLabels || {}).map(([p, l]) => [x(p), l]));
     this.hiddenTypes = new Set([...(json.hiddenTypes || []).map(x), ...(defaults.hiddenTypes || [])]);
     this.hiddenPredicates = new Set([...(json.hiddenPredicates || []).map(x), ...(defaults.hiddenPredicates || [])]);
@@ -110,10 +111,25 @@ export class Lens {
     return types.some((t) => this.imageTypes.has(t));
   }
 
+  isThumbnailProperty(p) {
+    return this.thumbnailProperties.includes(p);
+  }
+
+  // The thumbnail for a list item: the picture itself if the item is one,
+  // else the first thumbnail property with a value, else null.
+  thumbnailFor(iri, types, values) {
+    if (this.isImage(types)) return this.imageFor(iri, types, values);
+    for (const p of this.thumbnailProperties) {
+      const v = values?.get(p)?.[0];
+      if (v) return v;
+    }
+    return null;
+  }
+
   // All refs worth fetching to label and summarise a list item, split into
   // plain properties and paths (which need a query of their own).
   get briefRefs() {
-    const s = new Set([RDF_TYPE, ...this.labelProperties]);
+    const s = new Set([RDF_TYPE, ...this.labelProperties, ...this.thumbnailProperties]);
     for (const d of this.imageTypes.values()) (d.properties || []).forEach((p) => s.add(p));
     for (const spec of this.types.values()) {
       spec.title.forEach((tpl) => tpl.props.forEach((p) => s.add(p)));
