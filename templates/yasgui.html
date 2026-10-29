@@ -246,8 +246,12 @@ function escHtml(s) {
     }
     let html = '<div class="list-group list-group-flush">';
     for (const ex of examples) {
-      const kw = (ex.keywords || '').split(',').filter(Boolean)
-        .map(k => `<span class="badge bg-light text-dark border ms-1">${k.trim()}</span>`).join('');
+      // keywords is stored/returned as a JSON array string (e.g. '["titles","doi"]'),
+      // not a comma-separated list — parse it rather than splitting on ',' (issue #18).
+      let kwList = [];
+      try { kwList = ex.keywords ? JSON.parse(ex.keywords) : []; } catch { kwList = []; }
+      const kw = kwList.filter(Boolean)
+        .map(k => `<span class="badge bg-light text-dark border ms-1">${escHtml(String(k).trim())}</span>`).join('');
       html += `<div class="list-group-item list-group-item-action px-0 py-2 d-flex justify-content-between align-items-start">
         <div>
           <span class="fw-semibold small">${escHtml(ex.label)}</span>${kw}
