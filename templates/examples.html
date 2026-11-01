@@ -81,13 +81,33 @@ async function runExample(exSlug, exId) {
   if (!bindings.length) { el.innerHTML = '<em class="text-muted">No results.</em>'; return; }
   const cols = Object.keys(bindings[0]);
   let html = '<table class="table table-sm table-bordered mt-2"><thead><tr>' +
-    cols.map(c=>`<th>${c}</th>`).join('') + '</tr></thead><tbody>';
+    cols.map(c=>`<th>${esc(c)}</th>`).join('') + '</tr></thead><tbody>';
   for (const row of bindings.slice(0, 50)) {
-    html += '<tr>' + cols.map(c=>`<td>${row[c]?.value ?? ''}</td>`).join('') + '</tr>';
+    html += '<tr>' + cols.map(c => {
+      const cell = row[c];
+      if (!cell) return '<td></td>';
+      const val = esc(cell.value);
+      // A uri-typed binding is metadata worth following (an identifier, a
+      // DOI, a Wikidata link, ...) — same treatment as the main SPARQL editor
+      // (sparql_editor.html's renderResults), which this table never had.
+      return cell.type === 'uri' || isUrl(cell.value)
+        ? `<td><a href="${val}" target="_blank" rel="noopener">${val}</a></td>`
+        : `<td>${val}</td>`;
+    }).join('') + '</tr>';
   }
   html += '</tbody></table>';
   if (bindings.length > 50) html += `<small class="text-muted">Showing 50 of ${bindings.length}</small>`;
   el.innerHTML = html;
+}
+
+// A literal whose whole value is a URL ("https://…", xsd:anyURI) is as
+// worth following as an IRI (issue #19).
+function isUrl(s) {
+  return /^https?:\/\/[^\s<>"]+$/i.test(String(s));
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 async function deleteExample(exSlug) {
