@@ -22,7 +22,7 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
   <div>
     <h2 class="mb-0"><i class="bi bi-braces-asterisk"></i> SPARQL Editor</h2>
-    <p class="text-muted small mb-0">Query any public Koetai dataset</p>
+    <p class="text-muted small mb-0">Query any public Koetai dataset, or every dataset in a store at once</p>
   </div>
   <a href="{{ url_for('endpoints') }}" class="btn btn-sm btn-outline-secondary">
     <i class="bi bi-diagram-3"></i> All endpoints
@@ -32,7 +32,7 @@
 <!-- Endpoint selector -->
 <div class="card mb-3 border-0 shadow-sm">
   <div class="card-body py-3">
-    {% if datasets %}
+    {% if datasets or stores %}
     <div class="row g-2 align-items-end">
       <div class="col-auto">
         <label class="form-label small fw-semibold mb-1">Owner</label>
@@ -50,6 +50,18 @@
       <div class="col-auto">
         <label class="form-label small fw-semibold mb-1">Dataset</label>
         <select id="datasetSelect" class="form-select form-select-sm" style="min-width:260px">
+          {% if stores %}
+          <optgroup label="Across datasets">
+            {% for st in stores %}
+            <option value="store:{{ st.platform }}"
+                    data-store="{{ st.platform }}"
+                    data-endpoint="{{ st.endpoint }}">
+              All {{ st.label }} datasets ({{ st.datasets }})
+            </option>
+            {% endfor %}
+          </optgroup>
+          <optgroup label="One dataset">
+          {% endif %}
           {% for ds in datasets %}
           <option value="{{ ds.orcid_id }}/{{ ds.slug }}"
                   data-owner="{{ ds.orcid_id }}"
@@ -58,6 +70,7 @@
             {{ ds.owner_name or ds.orcid_id }} / {{ ds.label }}
           </option>
           {% endfor %}
+          {% if stores %}</optgroup>{% endif %}
         </select>
       </div>
       <div class="col-auto">
@@ -147,11 +160,14 @@ function applyDataset(opt) {
 
   const q = editor.getValue();
   if (!q.trim() || q.includes('?s ?p ?o')) {
-    editor.setValue(
-      `SELECT ?s ?p ?o\nWHERE {\n  GRAPH <${currentGraph}> {\n    ?s ?p ?o\n  }\n}\nLIMIT 25`
+    editor.setValue(opt.dataset.store
+      // Every data graph in the store is both the default graph and a named
+      // graph, so GRAPH ?g reports the dataset each triple came from.
+      ? `# Every dataset in this store you can see. ?g names the dataset\n# each triple came from; drop GRAPH to query them as one graph.\nSELECT ?g ?s ?p ?o\nWHERE {\n  GRAPH ?g { ?s ?p ?o }\n}\nLIMIT 25`
+      : `SELECT ?s ?p ?o\nWHERE {\n  GRAPH <${currentGraph}> {\n    ?s ?p ?o\n  }\n}\nLIMIT 25`
     );
   }
-  loadExamples(opt.value);
+  loadExamples(opt.dataset.store ? null : opt.value);
 }
 
 document.getElementById('ownerSelect').addEventListener('change', function() {
@@ -179,9 +195,11 @@ document.getElementById('copyEndpointBtn').addEventListener('click', () => {
 });
 
 async function loadExamples(ownerSlug) {
-  const [orcid, slug] = ownerSlug.split('/');
   const exSel = document.getElementById('exampleSelect');
   exSel.innerHTML = '<option value="">— load an example —</option>';
+  // Examples belong to a dataset; a whole store has none of its own.
+  if (!ownerSlug) return;
+  const [orcid, slug] = ownerSlug.split('/');
   try {
     const examples = await fetch(`/u/${orcid}/${slug}/examples/list`).then(r => r.json());
     for (const ex of examples) {
@@ -286,7 +304,7 @@ function esc(s) {
 
 window.addEventListener('DOMContentLoaded', () => {
   const params = new URLSearchParams(location.search);
-  const presel = params.get('dataset');
+  const presel = params.get('store') ? `store:${params.get('store')}` : params.get('dataset');
   const dsSel  = document.getElementById('datasetSelect');
   if (presel) {
     for (const opt of dsSel.options) {
