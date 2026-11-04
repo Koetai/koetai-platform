@@ -279,6 +279,24 @@ second runner and the two would race to claim the same job. Scale with `--thread
 not `--workers`. The included `koetai-platform.service` systemd unit and the
 `Dockerfile` both run one worker.
 
+### Replacing a dataset from the command line
+
+To swap a dataset's data for an updated file without the upload page (the
+equivalent of ticking "Replace existing data"), run on the server:
+
+```bash
+# Docker: copies the file into the container and loads it there
+scripts/replace-dataset.sh --slug col --file ~/taxa.nt.gz
+# Without Docker
+python3 scripts/replace_dataset.py --slug col --file ~/taxa.nt.gz
+```
+
+It runs the same upload job as the web UI, so it works on every backend and
+accepts the same formats and archives. `--append` adds instead of replacing,
+`--owl` applies reasoning, and `--owner <ORCID>` picks the dataset when two
+owners share a slug. It exits non-zero if the load fails, so it can run from
+cron or a pipeline. The dataset must already exist.
+
 ### Database
 
 ```bash
