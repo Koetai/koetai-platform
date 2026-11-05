@@ -32,20 +32,65 @@ def submit(dataset_id: int, user_id: int, file_path: Path, graph_uri: str,
     multi-gigabyte fetch off the request thread, where it would outlive
     gunicorn's timeout long before it finished.
     """
+    job_id = _insert_job("queued", dataset_id, user_id, file_path, graph_uri,
+                         apply_owl, owl_regime, replace_data,
+                         source_url, source_label, web_source_file_id)
+    _ensure_runner()
+    return job_id
+
+
+def run_now(dataset_id: int, user_id: int, file_path: Path, graph_uri: str,
+            apply_owl: bool, owl_regime: str, replace_data: bool,
+            progress=None) -> dict:
+    """Run an upload job in this process, wait for it, and return its status.
+
+    For command-line loads (scripts/replace_dataset.py), which run in a process
+    of their own beside the server. The row goes in as 'running', not 'queued':
+    the server's runner claims only 'queued' rows, so inserting it queued would
+    let both processes pick up the same job and load the file twice.
+
+    `progress`, if given, is called with each new status message as the job
+    writes it — the same messages the upload page polls for.
+    """
+    job_id = _insert_job("running", dataset_id, user_id, file_path, graph_uri,
+                         apply_owl, owl_regime, replace_data)
+    conn = _raw_conn()
+    job = dict(conn.execute("SELECT * FROM upload_jobs WHERE id=?", (job_id,)).fetchone())
+    conn.close()
+
+    finished = threading.Event()
+    if progress:
+        def watch():
+            last = None
+            while not finished.wait(2):
+                msg = (get_status(job_id) or {}).get("message")
+                if msg and msg != last:
+                    progress(msg)
+                    last = msg
+        threading.Thread(target=watch, daemon=True).start()
+    try:
+        _process(job)
+    finally:
+        finished.set()
+    return get_status(job_id)
+
+
+def _insert_job(status, dataset_id, user_id, file_path, graph_uri, apply_owl,
+                owl_regime, replace_data, source_url=None, source_label=None,
+                web_source_file_id=None) -> str:
     job_id = str(uuid.uuid4())
     conn = _raw_conn()
     with conn:
         conn.execute(
             "INSERT INTO upload_jobs "
-            "(id, dataset_id, user_id, file_path, graph_uri, apply_owl, owl_regime, "
-            " replace_data, source_url, source_label, web_source_file_id) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-            (job_id, dataset_id, user_id, str(file_path),
+            "(id, dataset_id, user_id, status, file_path, graph_uri, apply_owl, "
+            " owl_regime, replace_data, source_url, source_label, web_source_file_id) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            (job_id, dataset_id, user_id, status, str(file_path),
              graph_uri, int(apply_owl), owl_regime, int(replace_data),
              source_url, source_label, web_source_file_id)
         )
     conn.close()
-    _ensure_runner()
     return job_id
 
 
