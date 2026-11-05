@@ -159,6 +159,10 @@ RDF_LOAD_TIMEOUT = int(os.environ.get("RDF_LOAD_TIMEOUT", "3600"))
 # large load. Throughput against a store that already holds a hundred million
 # triples is roughly half these figures — the shape holds, the numbers do not.
 RDF_LOAD_BATCH_LINES = int(os.environ.get("RDF_LOAD_BATCH_LINES", "200000"))
+# Where the app and the loader agent exchange requests. The agent is the only
+# thing in the deployment with Docker access; the app only writes files here.
+# See services/bulk_loader.py and deploy/loader-agent/agent.sh.
+BULK_LOADER_DIR = os.environ.get("BULK_LOADER_DIR", "/data/bulk-loader")
 # Whether the original file survives a successful load. Derived files — an
 # OWL/XML conversion, a reasoned graph, the members of an archive — are always
 # removed; this governs only the thing that was uploaded or fetched.
