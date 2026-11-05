@@ -214,14 +214,14 @@ class SparqlHttpStore:
         except Exception as e:
             return False, str(e).encode(), "text/plain; charset=utf-8", 502
 
-    def sparql_update(self, query: str, **kw) -> tuple[bool, str]:
+    def sparql_update(self, query: str, timeout: int = None, **kw) -> tuple[bool, str]:
         try:
             r = requests.post(
                 self._url(self.update_path),
                 data=query.encode(),
                 headers={"Content-Type": "application/sparql-update"},
                 auth=self.auth,
-                timeout=self.query_timeout,
+                timeout=timeout or self.query_timeout,
             )
             return r.status_code < 400, r.text
         except Exception as e:
@@ -231,8 +231,19 @@ class SparqlHttpStore:
         """Append a file into a named graph (Graph Store Protocol POST)."""
         return self._gsp_write(requests.post, graph_uri, file_path, "Loaded into", progress)
 
-    def replace_graph(self, graph_uri: str, file_path: Path, progress=None, **kw) -> tuple[bool, str]:
-        """Replace a named graph atomically (Graph Store Protocol PUT)."""
+    def replace_graph(self, graph_uri: str, file_path: Path, progress=None,
+                      drain_progress=None, **kw) -> tuple[bool, str]:
+        """Replace a named graph (Graph Store Protocol PUT).
+
+        A PUT over a large graph has to delete everything already there in the
+        same transaction, which is the unbounded drop that _drain exists to
+        avoid. So the old contents are drained first, and the PUT replaces only
+        what is left. Atomic for a small graph; for a large one the old data is
+        gone before the new arrives.
+        """
+        ok, msg = self._drain(graph_uri, drain_progress)
+        if not ok:
+            return False, f"Could not remove the previous data: {msg}"
         return self._gsp_write(requests.put, graph_uri, file_path, "Replaced", progress)
 
     # Formats where one line is one statement, so the file can be split without
@@ -324,11 +335,50 @@ class SparqlHttpStore:
             return False, str(e)
         return True, f"{verb} <{graph_uri}> ({total:,} statements)"
 
-    def drop_graph(self, graph_uri: str, **kw) -> tuple[bool, str]:
-        # Dropping is a write across as many triples as loading them was, so it
-        # gets the load timeout rather than a short one. At 30s a multi-million
-        # triple graph timed out client-side while the store went on to complete
-        # it, leaving the caller believing a delete had failed that had not.
+    def _drain(self, graph_uri: str, progress=None) -> tuple[bool, str]:
+        """Delete a graph's triples in batches until fewer than one batch remain.
+
+        Dropping a graph is one transaction, which the store builds in memory
+        before it commits, so its peak cost scales with the graph. On a large
+        Oxigraph dataset that meant a delete that never finished: memory climbed
+        until the store was killed, nothing was removed, and every retry started
+        another. Deleting a bounded batch at a time keeps each transaction small,
+        at the cost of atomicity: a failure part-way leaves the graph partly
+        emptied, and repeating the delete finishes the job.
+
+        A small graph costs one ASK and is left for the caller's single write.
+        """
+        n = config.RDF_LOAD_BATCH_LINES
+        if n <= 0:
+            return True, "batching disabled"
+        g = f"<{graph_uri}>"
+        more_than_a_batch = (f"ASK {{ {{ SELECT * WHERE {{ GRAPH {g} {{ ?s ?p ?o }} }} "
+                             f"OFFSET {n} LIMIT 1 }} }}")
+        delete_batch = (f"DELETE {{ GRAPH {g} {{ ?s ?p ?o }} }} WHERE {{ "
+                        f"{{ SELECT ?s ?p ?o WHERE {{ GRAPH {g} {{ ?s ?p ?o }} }} LIMIT {n} }} }}")
+        removed = 0
+        while True:
+            ok, result = self.sparql_query(more_than_a_batch, timeout=self.load_timeout)
+            if not ok:
+                return False, str(result.get("error", result))[:300]
+            if not result.get("boolean"):
+                return True, f"removed {removed:,} statements in batches"
+            ok, msg = self.sparql_update(delete_batch, timeout=self.load_timeout)
+            if not ok:
+                return False, (f"{msg[:300]} — after {removed:,} statements. "
+                               f"Deleting again carries on from here.")
+            removed += n
+            if progress:
+                progress(removed)
+
+    def drop_graph(self, graph_uri: str, progress=None, **kw) -> tuple[bool, str]:
+        ok, msg = self._drain(graph_uri, progress)
+        if not ok:
+            return False, msg
+        # What _drain leaves is under one batch, but the drop still gets the load
+        # timeout: at 30s a store that was slow for any reason timed out
+        # client-side and went on to complete it, leaving the caller believing a
+        # delete had failed that had not.
         try:
             r = requests.delete(
                 self._url(self.gsp_path),
