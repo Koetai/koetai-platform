@@ -4,9 +4,10 @@ import os
 import uuid
 from pathlib import Path
 from flask import (Blueprint, render_template, request, redirect,
-                   url_for, flash, jsonify, Response)
+                   url_for, flash, jsonify)
 from werkzeug.utils import secure_filename
 from flask_login import login_required, current_user
+from routes.sparql import proxy_query
 import config
 from services.db import get_db
 from services import bulk_loader, triplestore, owl_service, job_runner, sparql_http
@@ -409,26 +410,7 @@ def sparql_endpoint(owner_orcid, slug):
     if not query:
         return jsonify({"error": "No query provided"}), 400
 
-    ts = triplestore.get(ds)
-    scope = triplestore.dataset_scope(ds)
-
-    # Federation and QLever stores only offer the parsed-JSON interface.
-    raw = getattr(ts, "sparql_query_raw", None)
-    if raw is None:
-        ok, result = ts.sparql_query(query, graphs=scope)
-        return jsonify(result), (200 if ok else 500)
-
-    # Return what the client asked for, in the form the store produced it.
-    # Forcing results JSON on everything meant DESCRIBE and CONSTRUCT could not
-    # work at all: they return a graph, the store answered 406, and the client
-    # was told its Accept header was wrong when it had never set one.
-    accept = sparql_http.accept_for(query, request.headers.get("Accept", ""))
-    ok, body, content_type, status = raw(query, graphs=scope, accept=accept)
-    if not ok:
-        # Keep the JSON error shape the editor expects, but carry the store's
-        # own message and status rather than flattening everything to 500.
-        return jsonify({"error": body.decode("utf-8", "replace").strip()}), status
-    return Response(body, status=200, content_type=content_type)
+    return proxy_query(triplestore.get(ds), query, triplestore.dataset_scope(ds))
 
 
 

@@ -12,6 +12,41 @@
   </a>
 </div>
 
+{% if stores %}
+<div class="mb-4">
+  <h5 class="mb-1">Across datasets</h5>
+  <p class="text-muted small mb-2">
+    One endpoint per store, over every dataset in it you can see. A plain
+    pattern reads them all as one graph; <code>GRAPH ?g</code> names the
+    dataset each triple came from. Datasets in different stores cannot be
+    joined here.
+  </p>
+  <div class="row g-3">
+  {% for st in stores %}
+  <div class="col-md-6 col-lg-4">
+    <div class="card h-100 shadow-sm card-dataset">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <h6 class="mb-0">All {{ st.label }} datasets</h6>
+          <span class="badge bg-light text-dark border fw-normal ms-1">
+            {{ st.datasets }} dataset{{ 's' if st.datasets != 1 }}
+          </span>
+        </div>
+        <a href="{{ url_for('sparql_editor', store=st.platform) }}" class="btn btn-sm btn-primary">
+          <i class="bi bi-braces"></i> SPARQL
+        </a>
+      </div>
+      <div class="card-footer bg-transparent border-top-0 pt-0">
+        <code class="text-muted" style="font-size:.7rem">{{ st.endpoint }}</code>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+  </div>
+</div>
+<hr>
+{% endif %}
+
 {% if owners %}
 
 {% if owners | length > 1 or owners[0].datasets | length > 5 %}

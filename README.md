@@ -230,6 +230,28 @@ Reliability follows the sources: if a remote endpoint is down or rate-limits, th
 query surfaces that error rather than partial data. Use it to join your own data
 against public knowledge graphs without copying them in.
 
+### Querying across datasets
+
+Each dataset's endpoint (`/u/<orcid>/<slug>/sparql`) sees only that dataset.
+Oxigraph, Fuseki and QLever each also get one endpoint over every dataset they
+hold, at `/sparql/oxigraph`, `/sparql/fuseki` and `/sparql/qlever`. Both are
+listed on the Endpoints page and in the SPARQL editor's dropdown.
+
+- A plain pattern reads every dataset's data as one graph, and `GRAPH ?g` names
+  the dataset each triple came from — the graph is `<dataset URL>/data`. So a
+  query across datasets keeps the provenance of every result.
+- It covers the datasets the caller may see: public ones, and your own private
+  ones when signed in. Examples and shapes graphs are left out.
+- Nothing is copied. The endpoint passes the store the list of graphs in scope
+  (the SPARQL 1.1 Protocol's `default-graph-uri` / `named-graph-uri`), the same
+  way a dataset's own endpoint is confined to its graphs.
+- A query runs inside one store, so datasets in different stores cannot be
+  joined here; use a federation dataset or `SERVICE` for that.
+- The store is sent the full list of graphs in scope with every query, in the
+  URL while it is short and in the request body once it is not (Oxigraph caps
+  headers at 8 KB, about fifty datasets). Tested with 2,000 graphs on Oxigraph,
+  Fuseki and QLever.
+
 ## Setup
 
 ### Prerequisites
@@ -388,6 +410,7 @@ koetai-platform/
 │   ├── examples.py          # SPARQL examples (sparql-examples format)
 │   ├── shapes.py            # ShEx/SHACL inference and validation
 │   ├── sparqlist.py         # SPARQLList-style parameterised REST API
+│   ├── sparql.py            # Per-store SPARQL endpoints across datasets
 │   ├── fdp.py               # FAIR Data Point DCAT metadata
 │   ├── github.py            # GitHub/GitLab SPARQL example sync
 │   └── web_sources.py       # Web source harvesting

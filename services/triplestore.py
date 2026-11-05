@@ -47,6 +47,29 @@ def dataset_scope(ds):
     )
 
 
+# Stores offered as one endpoint across all their datasets (routes/sparql.py).
+# Each has been checked to merge several default-graph-uri values into one
+# default graph and to hide every graph outside the scope.
+CROSS_DATASET_BACKENDS = ("oxigraph", "fuseki", "qlever")
+
+
+def cross_dataset_scope(datasets):
+    """Graph restriction spanning several datasets' data graphs.
+
+    The union of their `/data` graphs is the default graph, so a bare pattern
+    reads all of them, and each is also a named graph, so GRAPH ?g says which
+    dataset a triple came from. `/examples` and `/shapes` are left out: they
+    describe a dataset rather than being part of its data.
+
+    Returns None for no datasets, rather than a scope that would read nothing
+    or, sent unchecked, everything.
+    """
+    graphs = [ds["graph_base"] + "/data" for ds in datasets]
+    if not graphs:
+        return None
+    return build_scope(default=graphs, named=graphs)
+
+
 class QLeverStore:
     """QLever. Writes go to its delta layer and require --persist-updates on the
     server to survive a restart (see the platform Qleverfile)."""
