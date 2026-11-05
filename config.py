@@ -122,6 +122,13 @@ SPARQL_EXAMPLES_REPO = os.environ.get("SPARQL_EXAMPLES_REPO", "sparql-examples")
 
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
+# Map tiles for the graph browser (miller-browser). Blank means its default,
+# OpenStreetMap's public tile server, which is fine for light use; a busy
+# instance should point this at its own provider.
+MAP_TILE_URL         = os.environ.get("MAP_TILE_URL", "").strip()
+MAP_TILE_ATTRIBUTION = os.environ.get("MAP_TILE_ATTRIBUTION", "").strip()
+MAP_TILE_MAX_ZOOM    = int(os.environ.get("MAP_TILE_MAX_ZOOM", "19"))
+
 GRAPH_BASE = BASE_URL + "/u/{user}/{dataset}"
 
 ALLOWED_RDF_EXTENSIONS = {".ttl", ".nt", ".n3", ".rdf", ".owl", ".trig", ".nq", ".jsonld"}
