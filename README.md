@@ -104,7 +104,7 @@ equally proven, so this table says plainly where each one stands:
 |---|---|---|
 | `fuseki` | **Tested, ships by default** | Apache Jena TDB2. Started by `docker compose up`. The safest choice. |
 | `oxigraph` | **Tested** | `docker compose --profile oxigraph up -d`. Smaller and lighter than Fuseki; needs 0.5.11 or later (see below). |
-| `qlever` | **Queries only** | Not started by compose — it serves an index built offline, so it needs its own setup. Uploading from Koetai does not work: the app sends no access token, which QLever requires for updates, and files over 50 MB take a rebuild path that assumes the app and QLever share a filesystem. |
+| `qlever` | **Queries only, by design** | Point it at an index you built yourself and it answers queries. Uploading through Koetai does not work and is not really fixable — see below. |
 | `virtuoso` | *Implemented, untested* | Reached over the same SPARQL 1.1 + Graph Store Protocol client as Fuseki and Oxigraph, and configurable in `.env`, but not exercised. |
 | `blazegraph` | *Implemented, untested* | As above. Uses `context-uri` rather than `graph` for the Graph Store parameter. |
 | `rdf4j` | *Implemented, untested* | As above. |
@@ -174,6 +174,79 @@ Those took a Fuseki volume from 6.8 GB to 201 MB and an Oxigraph one from 7.3 GB
 to 83 MB. On a local install `docker compose down -v` is the blunter equivalent,
 and destroys the data with it.
 
+### QLever is read-only here, and that is deliberate
+
+QLever runs perfectly well as another container — the image is multi-arch, so it
+is as happy on ARM as on x86. What does not work is *uploading* to it, and the
+reason is structural rather than a missing afternoon's work.
+
+Oxigraph and Fuseki accept data incrementally: a load adds one dataset's triples
+into its own named graph and leaves the rest alone. QLever does not work that
+way. It serves an index built offline by `qlever-index`, which takes a set of
+input files and produces an index — there is no append, merge or incremental
+mode. Per-file graphs are supported, so a multi-tenant layout is expressible,
+but only by naming every file in every build.
+
+So adding one dataset means rebuilding all of them. On a platform holding a few
+hundred million triples, a 50 MB upload would re-index the lot, take every
+dataset offline while it ran, and require that every source file ever uploaded
+be kept for ever — since the sources are the only thing the index can be rebuilt
+from. That is the opposite of what this platform does with uploads everywhere
+else.
+
+Two smaller things are also unfixed, and would need doing first even for the
+rebuild path: the app sends no access token, which QLever requires for every
+update, and the >50 MB path in `services/qlever.py` shells out to the `qlever`
+CLI assuming the app and the store share a filesystem, which is not true in a
+container split.
+
+The sensible use of QLever here is a **published** dataset rather than an
+editable one: build the index yourself, point `QLEVER_PLATFORM_URL` at the
+server, and query it. Uploads belong on Oxigraph or Fuseki.
+### Loading a large file faster
+
+Uploads go into the store over the SPARQL Graph Store Protocol, which is the
+store's transactional path. Oxigraph's own loader is not, and the gap is wide:
+2.4M triples measured at **67 s over HTTP against 4 s with the loader**, about
+17x. On an 11 GB dump that is the difference between most of an hour and a
+couple of minutes.
+
+`scripts/bulk_load.sh` uses it from the command line:
+
+```bash
+scripts/bulk_load.sh --slug col --file ~/taxa.nt.gz
+```
+
+Create the dataset in the UI first — the script reads its graph URI and backend
+from the app, rather than inventing a graph nothing would query. A gzip is
+streamed into the loader rather than unpacked to disk, and the script refuses to
+run while another upload is in progress, since stopping the store would kill it.
+
+The same thing is available as a **Fast load** button on a dataset's Upload tab,
+but only where it can actually work: an admin, on an Oxigraph dataset, with the
+loader agent running. Anywhere else the button is not offered.
+
+The agent is what makes the button possible, and it exists for a security
+reason. The loader needs exclusive access to the database directory, so
+**Oxigraph stops while a fast load runs** and the endpoint is unavailable until
+it finishes. Stopping a container takes Docker access, and an app with the
+Docker socket is an app with root on the host — so the app does not get it.
+Instead it writes a request file into a directory that `deploy/loader-agent`
+watches, and reads the result back. The agent's container, volume and image are
+configuration rather than part of a request, and a request's file must resolve
+inside the uploads directory, so the worst it can be made to do is load a file
+the app already wrote and restart the store.
+
+The loader reads `.nt`, `.nq` and `.ttl`, optionally gzipped or bzip2ed. It
+sorts in memory and is the hungriest thing in the deployment — 9M triples
+measured at 4.1 GB resident — so the agent caps it (`LOADER_MEMORY`, 6 GB by
+default): failing one oversized load beats losing the machine. Optimising the
+store afterwards is offered as a checkbox; it is a second pass over the data,
+worth it after a big import and not worth it after a small one.
+
+Fuseki has its own equivalent (`tdb2.tdbloader`) and QLever builds its index
+offline; neither is wired up here.
+
 ### Federation datasets (Comunica)
 
 A dataset with `platform='comunica'` is **virtual**: it stores no data of its own
@@ -185,6 +258,28 @@ don't apply — the dataset *is* its source list. Powered by
 Reliability follows the sources: if a remote endpoint is down or rate-limits, the
 query surfaces that error rather than partial data. Use it to join your own data
 against public knowledge graphs without copying them in.
+
+### Querying across datasets
+
+Each dataset's endpoint (`/u/<orcid>/<slug>/sparql`) sees only that dataset.
+Oxigraph, Fuseki and QLever each also get one endpoint over every dataset they
+hold, at `/sparql/oxigraph`, `/sparql/fuseki` and `/sparql/qlever`. Both are
+listed on the Endpoints page and in the SPARQL editor's dropdown.
+
+- A plain pattern reads every dataset's data as one graph, and `GRAPH ?g` names
+  the dataset each triple came from — the graph is `<dataset URL>/data`. So a
+  query across datasets keeps the provenance of every result.
+- It covers the datasets the caller may see: public ones, and your own private
+  ones when signed in. Examples and shapes graphs are left out.
+- Nothing is copied. The endpoint passes the store the list of graphs in scope
+  (the SPARQL 1.1 Protocol's `default-graph-uri` / `named-graph-uri`), the same
+  way a dataset's own endpoint is confined to its graphs.
+- A query runs inside one store, so datasets in different stores cannot be
+  joined here; use a federation dataset or `SERVICE` for that.
+- The store is sent the full list of graphs in scope with every query, in the
+  URL while it is short and in the request body once it is not (Oxigraph caps
+  headers at 8 KB, about fifty datasets). Tested with 2,000 graphs on Oxigraph,
+  Fuseki and QLever.
 
 ## Setup
 
@@ -265,6 +360,28 @@ Key `.env` variables:
 | `RUDOF_BIN` | Path to rudof binary |
 | `SHEXER_VENV` | Path to Python interpreter with shexer installed |
 
+### Running it in the cloud
+
+`deploy/CLOUD-INSTALL.md` is a start-to-finish install on a fresh Linux host,
+ending with an HTTPS site you sign into with ORCID. It uses
+`docker-compose.prod.yml`, an overlay on the base file that takes the app off the
+public interface, puts Caddy in front for certificates, pins the store's image
+and caps memory — the base file is a single-user laptop install and should not
+face the internet as it stands.
+
+Two things it insists on that are easy to miss: decide `BASE_URL` before loading
+anything, because it is written into every dataset's graph URIs, and set
+`KOETAI_ADMIN_ORCIDS` to your own ORCID, because registration is invitation-only
+and nothing else creates the first administrator.
+
+**There are no backups, by design.** For a single-author instance holding data
+that also exists on the author's own machine, a backup regime costs more
+attention than it earns. That stops being true as soon as other people's work is
+in there, anything cites it, or it holds shapes and examples authored in the UI
+and nowhere else. `deploy/BACKUPS.md` sets out what is at risk — the SQLite
+database, ~100 KB and irreplaceable, as against a triplestore that is enormous
+and reloadable — and a shape for adding one when that day comes.
+
 ### Run
 
 ```bash
@@ -278,6 +395,24 @@ background thread that polls the upload-jobs table; a second worker would start 
 second runner and the two would race to claim the same job. Scale with `--threads`,
 not `--workers`. The included `koetai-platform.service` systemd unit and the
 `Dockerfile` both run one worker.
+
+### Replacing a dataset from the command line
+
+To swap a dataset's data for an updated file without the upload page (the
+equivalent of ticking "Replace existing data"), run on the server:
+
+```bash
+# Docker: copies the file into the container and loads it there
+scripts/replace-dataset.sh --slug col --file ~/taxa.nt.gz
+# Without Docker
+python3 scripts/replace_dataset.py --slug col --file ~/taxa.nt.gz
+```
+
+It runs the same upload job as the web UI, so it works on every backend and
+accepts the same formats and archives. `--append` adds instead of replacing,
+`--owl` applies reasoning, and `--owner <ORCID>` picks the dataset when two
+owners share a slug. It exits non-zero if the load fails, so it can run from
+cron or a pipeline. The dataset must already exist.
 
 ### Database
 
@@ -304,6 +439,7 @@ koetai-platform/
 │   ├── examples.py          # SPARQL examples (sparql-examples format)
 │   ├── shapes.py            # ShEx/SHACL inference and validation
 │   ├── sparqlist.py         # SPARQLList-style parameterised REST API
+│   ├── sparql.py            # Per-store SPARQL endpoints across datasets
 │   ├── fdp.py               # FAIR Data Point DCAT metadata
 │   ├── github.py            # GitHub/GitLab SPARQL example sync
 │   └── web_sources.py       # Web source harvesting

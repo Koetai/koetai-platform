@@ -119,6 +119,9 @@ CREATE TABLE IF NOT EXISTS upload_jobs (
     source_url  TEXT,
     source_label TEXT,
     web_source_file_id INTEGER,
+    -- 'load' for an upload or fetch; 'delete' / 'delete-force' to remove the
+    -- dataset (file_path is then empty and graph_uri is the graph base).
+    kind        TEXT    NOT NULL DEFAULT 'load',
     created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
     finished_at TEXT
 );
