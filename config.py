@@ -44,7 +44,14 @@ def _csv_set(name: str, lower: bool = False) -> frozenset:
 # admin rights — set your own ORCID there to bootstrap a fresh instance.
 INTERNAL_ALLOWED_ORCIDS  = _csv_set("INTERNAL_ALLOWED_ORCIDS")
 INTERNAL_ALLOWED_DOMAINS = _csv_set("INTERNAL_ALLOWED_DOMAINS", lower=True)
-INTERNAL_ADMIN_ORCIDS    = _csv_set("INTERNAL_ADMIN_ORCIDS")
+
+# ORCIDs that are admin on this instance, in any mode, and may register without
+# an invitation. Without this a fresh community install cannot be signed into at
+# all: registering needs an invite, invites are created by an admin, and nothing
+# ever makes the first admin — so there is no way in. INTERNAL_ADMIN_ORCIDS is
+# still read, since instances already configured that way should keep working.
+ADMIN_ORCIDS = _csv_set("KOETAI_ADMIN_ORCIDS") | _csv_set("INTERNAL_ADMIN_ORCIDS")
+INTERNAL_ADMIN_ORCIDS = ADMIN_ORCIDS
 
 
 def _required(name: str, local_default: str = "") -> str:
