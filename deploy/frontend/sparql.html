@@ -1096,6 +1096,10 @@ async function runQuery() {
   }
 }
 
+function isUrl(s) {
+  return /^https?:\/\/[^\s<>"]+$/i.test(String(s));
+}
+
 function displayResults(data) {
   const resultsDiv = document.getElementById('results');
   const vars = data.head.vars;
@@ -1110,7 +1114,7 @@ function displayResults(data) {
   let html = '<div class="results-container"><table><thead><tr>';
   
   vars.forEach(v => {
-    html += `<th>${v}</th>`;
+    html += `<th>${escHtml(v)}</th>`;
   });
   
   html += '</tr></thead><tbody>';
@@ -1120,10 +1124,13 @@ function displayResults(data) {
     vars.forEach(v => {
       const value = row[v];
       if (value) {
-        if (value.type === 'uri') {
-          html += `<td><a href="${value.value}" target="_blank">${value.value}</a></td>`;
+        const val = escHtml(value.value);
+        // IRIs, and literals whose whole value is a URL (e.g. "https://…" or
+        // xsd:anyURI), are both worth following (issue #19).
+        if (value.type === 'uri' || isUrl(value.value)) {
+          html += `<td><a href="${val}" target="_blank" rel="noopener">${val}</a></td>`;
         } else {
-          html += `<td>${value.value}</td>`;
+          html += `<td>${val}</td>`;
         }
       } else {
         html += '<td class="muted">-</td>';

@@ -44,7 +44,14 @@ def _csv_set(name: str, lower: bool = False) -> frozenset:
 # admin rights — set your own ORCID there to bootstrap a fresh instance.
 INTERNAL_ALLOWED_ORCIDS  = _csv_set("INTERNAL_ALLOWED_ORCIDS")
 INTERNAL_ALLOWED_DOMAINS = _csv_set("INTERNAL_ALLOWED_DOMAINS", lower=True)
-INTERNAL_ADMIN_ORCIDS    = _csv_set("INTERNAL_ADMIN_ORCIDS")
+
+# ORCIDs that are admin on this instance, in any mode, and may register without
+# an invitation. Without this a fresh community install cannot be signed into at
+# all: registering needs an invite, invites are created by an admin, and nothing
+# ever makes the first admin — so there is no way in. INTERNAL_ADMIN_ORCIDS is
+# still read, since instances already configured that way should keep working.
+ADMIN_ORCIDS = _csv_set("KOETAI_ADMIN_ORCIDS") | _csv_set("INTERNAL_ADMIN_ORCIDS")
+INTERNAL_ADMIN_ORCIDS = ADMIN_ORCIDS
 
 
 def _required(name: str, local_default: str = "") -> str:
@@ -159,6 +166,10 @@ RDF_LOAD_TIMEOUT = int(os.environ.get("RDF_LOAD_TIMEOUT", "3600"))
 # large load. Throughput against a store that already holds a hundred million
 # triples is roughly half these figures — the shape holds, the numbers do not.
 RDF_LOAD_BATCH_LINES = int(os.environ.get("RDF_LOAD_BATCH_LINES", "200000"))
+# Where the app and the loader agent exchange requests. The agent is the only
+# thing in the deployment with Docker access; the app only writes files here.
+# See services/bulk_loader.py and deploy/loader-agent/agent.sh.
+BULK_LOADER_DIR = os.environ.get("BULK_LOADER_DIR", "/data/bulk-loader")
 # Whether the original file survives a successful load. Derived files — an
 # OWL/XML conversion, a reasoned graph, the members of an archive — are always
 # removed; this governs only the thing that was uploaded or fetched.

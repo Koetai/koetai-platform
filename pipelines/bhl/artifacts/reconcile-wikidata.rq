@@ -1,0 +1,21 @@
+# Reconciles BHL's dwc:scientificName strings against Wikidata taxa.
+#
+# Run against Wikidata's own endpoint (https://query.wikidata.org/sparql),
+# NOT against the BHL graph — Wikidata knows nothing about bhl: URIs, so this
+# can only be a SELECT here; stage 04 joins the results back onto BHL's own
+# dwc:scientificName triples locally to build the dwc:scientificNameID
+# triples. "CONSTRUCT query" in the plan meant that local join step, not a
+# single federated query spanning both graphs.
+#
+# {{NAMES}} is replaced by stage 04 with a batch of distinct scientificName
+# values (VALUES clause) — batched by *distinct* name, not per-triple: BHL
+# has ~211M page-name triples but a far smaller distinct-name set, and only
+# the distinct set needs to hit Wikidata at all. Batch size is set in stage
+# 04, not here — this file is the query shape, not the batching policy.
+
+PREFIX wdt: <http://www.wikidata.org/prop/direct/>
+
+SELECT ?name ?taxon WHERE {
+  VALUES ?name { {{NAMES}} }
+  ?taxon wdt:P225 ?name .
+}

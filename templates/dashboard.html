@@ -31,6 +31,11 @@
                 {{ ds.platform }}
               </span>
               {% if not ds.is_public %}<span class="badge bg-secondary fw-normal">private</span>{% endif %}
+              {% if ds.delete_status in ('queued', 'running') %}
+              <span class="badge bg-info text-dark fw-normal"><i class="bi bi-hourglass-split"></i> deleting…</span>
+              {% elif ds.delete_status == 'error' %}
+              <span class="badge bg-danger fw-normal">delete failed</span>
+              {% endif %}
             </div>
             {% if ds.description %}
             <p class="text-muted small mb-2">{{ ds.description }}</p>

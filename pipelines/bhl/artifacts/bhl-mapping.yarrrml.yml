@@ -1,0 +1,211 @@
+# BHL (Biodiversity Heritage Library) TSV dump -> RDF.
+#
+# Sources are read as TSV directly by Morph-KGC (confirmed native support,
+# no database needed) from *.tsv copies stage 02 makes of BHL's *.txt files.
+#
+# doi.txt covers both titles and parts (EntityType column) and Morph-KGC row
+# filtering by column value isn't something this pipeline relies on — stage 02
+# pre-splits it into doi_title.tsv / doi_part.tsv before this mapping runs.
+#
+# Identifier-to-URI resolution (VIAF/Wikidata/OCLC/LC/SNAC -> owl:sameAs) is
+# deliberately NOT done here — every identifier table maps uniformly to a
+# literal CURIE (dcterms:identifier "Namespace:Value"), and a separate,
+# independently-testable post-processing pass (artifacts/lookups.py, run by
+# stage 02) adds the owl:sameAs triples for namespaces with a known, real URI
+# pattern. Keeping that logic in plain Python instead of RML functions makes
+# it something this pipeline can unit-test in isolation.
+
+prefixes:
+  dcterms: "http://purl.org/dc/terms/"
+  bibo:    "http://purl.org/ontology/bibo/"
+  foaf:    "http://xmlns.com/foaf/0.1/"
+  dwc:     "http://rs.tdwg.org/dwc/terms/"
+  owl:     "http://www.w3.org/2002/07/owl#"
+  xsd:     "http://www.w3.org/2001/XMLSchema#"
+  bhlv:    "https://www.biodiversitylibrary.org/vocab/"
+  bhl:     "https://www.biodiversitylibrary.org/"
+
+mappings:
+
+  # ── Items (one digitized volume / scan) ────────────────────────────────────
+  items:
+    sources:
+      - ['item.tsv~csv']
+    s: bhl:item/$(ItemID)
+    po:
+      - [a, bibo:Book]
+      - [dcterms:identifier, $(BarCode)]
+      - [dcterms:isPartOf, bhl:bibliography/$(TitleID)~iri]
+      - [dcterms:date, $(Year), xsd:gYear]
+      - [bhlv:institution, $(InstitutionName)]
+      - [bhlv:copyrightStatus, $(CopyrightStatus)]
+
+  # ── Titles (the bibliographic work) ─────────────────────────────────────────
+  titles:
+    sources:
+      - ['title.tsv~csv']
+    s: bhl:bibliography/$(TitleID)
+    po:
+      - [a, bhlv:Title]
+      - [dcterms:title, $(FullTitle)]
+      - [dcterms:language, $(LanguageCode)]
+      - [dcterms:issued, $(StartYear), xsd:gYear]
+      - [bhlv:endYear, $(EndYear)]
+
+  title_subjects:
+    sources:
+      - ['subject.tsv~csv']
+    s: bhl:bibliography/$(TitleID)
+    po:
+      - [dcterms:subject, $(Subject)]
+
+  # ── Creators (title-linked) ─────────────────────────────────────────────────
+  # creator.txt is a title<->creator join row, not a deduplicated creator
+  # table — repeated identical entity triples for the same CreatorID across
+  # multiple titles simply merge, which is the correct outcome here.
+  creators:
+    sources:
+      - ['creator.tsv~csv']
+    s: bhl:creator/$(CreatorID)
+    po:
+      - [a, foaf:Agent]
+      - [foaf:name, $(CreatorName)]
+      - [bhlv:creatorType, $(CreatorType)]
+
+  title_creators:
+    sources:
+      - ['creator.tsv~csv']
+    s: bhl:bibliography/$(TitleID)
+    po:
+      # Fixes #6: a real, dereferenceable BHL creator URI, not urn:bhl:creator:N.
+      - [dcterms:creator, bhl:creator/$(CreatorID)~iri]
+
+  # Literal CURIE, uniform with title/part identifiers below; see
+  # artifacts/lookups.py for the owl:sameAs resolution pass.
+  creator_identifiers:
+    sources:
+      - ['creatoridentifier.tsv~csv']
+    s: bhl:creator/$(CreatorID)
+    po:
+      - [dcterms:identifier, "$(IdentifierName):$(IdentifierValue)~literal"]
+
+  # ── Title identifiers (titleidentifier.txt was never joined by the
+  #     original script — this whole mapping is new; fixes #3/#7) ────────────
+  title_identifiers:
+    sources:
+      - ['titleidentifier.tsv~csv']
+    s: bhl:bibliography/$(TitleID)
+    po:
+      - [dcterms:identifier, "$(IdentifierName):$(IdentifierValue)~literal"]
+
+  # ── DOIs (fixes #1: no percent-encoding of the structural '/') ─────────────
+  title_dois:
+    sources:
+      - ['doi_title.tsv~csv']
+    s: bhl:bibliography/$(EntityID)
+    po:
+      - [owl:sameAs, https://doi.org/$(DOI)~iri]
+
+  part_dois:
+    sources:
+      - ['doi_part.tsv~csv']
+    s: bhl:part/$(EntityID)
+    po:
+      - [owl:sameAs, https://doi.org/$(DOI)~iri]
+
+  # ── Parts (articles within an item) ─────────────────────────────────────────
+  parts:
+    sources:
+      - ['part.tsv~csv']
+    s: bhl:part/$(PartID)
+    po:
+      - [a, bibo:Article]
+      - [dcterms:title, $(Title)]
+      - [dcterms:isPartOf, bhl:item/$(ItemID)~iri]
+      - [dcterms:date, $(Date)]
+      - [bibo:volume, $(Volume)]
+      - [bibo:issue, $(Issue)]
+      - [bhlv:containerTitle, $(ContainerTitle)]
+      - [bhlv:pageRange, $(PageRange)]
+
+  # partcreator.txt carries CreatorID *and* CreatorName in the same row — the
+  # original script only used CreatorName (a bare literal). Fixes #5/#6: build
+  # the same real creator URI titles already use, and give it a name from
+  # this same row (a creator who only ever authored parts, never a title,
+  # would otherwise never appear in the `creators` mapping above at all).
+  part_creator_entities:
+    sources:
+      - ['partcreator.tsv~csv']
+    s: bhl:creator/$(CreatorID)
+    po:
+      - [a, foaf:Agent]
+      - [foaf:name, $(CreatorName)]
+
+  part_creators:
+    sources:
+      - ['partcreator.tsv~csv']
+    s: bhl:part/$(PartID)
+    po:
+      - [dcterms:creator, bhl:creator/$(CreatorID)~iri]
+
+  part_identifiers:
+    sources:
+      - ['partidentifier.tsv~csv']
+    s: bhl:part/$(PartID)
+    po:
+      - [dcterms:identifier, "$(IdentifierName):$(IdentifierValue)~literal"]
+
+  # ── Pages ────────────────────────────────────────────────────────────────
+  pages:
+    sources:
+      - ['page.tsv~csv']
+    s: bhl:page/$(PageID)
+    po:
+      - [a, bibo:Page]
+      - [dcterms:isPartOf, bhl:item/$(ItemID)~iri]
+      - [dcterms:date, $(Year), xsd:gYear]
+      # Explicit xsd:integer, not left to Morph-KGC's implicit inference —
+      # confirmed inconsistent across source files (partpage.tsv's same
+      # column came out as plain xsd:string for the exact same value shape,
+      # "157" — likely pandas dtype inference differing per file/chunk based
+      # on whether every value happens to parse as numeric).
+      - [bhlv:sequenceOrder, $(SequenceOrder), xsd:integer]
+      # Two separate literals, not a concatenated "Page N" string: a
+      # multi-reference template defaults to IRI term type in RML (verified
+      # against this exact mapping — "Page 1" as one field broke as a
+      # malformed IRI), and a single bare reference is the only object shape
+      # guaranteed to come out as a literal without fighting that default.
+      - [bhlv:pagePrefix, $(PagePrefix)]
+      - [bhlv:pageNumber, $(PageNumber)]
+
+  pagenames:
+    sources:
+      - ['pagename.tsv~csv']
+    s: bhl:page/$(PageID)
+    po:
+      - [dwc:scientificName, $(NameConfirmed)]
+      - [bhlv:nameBankID, $(NameBankID)]
+
+  # ── Part -> page membership ──────────────────────────────────────────────
+  # Kept as a simple, unordered relation for backward compatibility with
+  # existing queries (Rod's, and today's saved examples) that already use it.
+  part_has_page:
+    sources:
+      - ['partpage.tsv~csv']
+    s: bhl:part/$(PartID)
+    po:
+      - [bhlv:hasPage, bhl:page/$(PageID)~iri]
+
+  # Fixes #4: partpage.txt's own SequenceOrder (position *within this part*,
+  # distinct from the page's item-level SequenceOrder) was never carried
+  # through. A plain triple can't attach a property to a relation, so this
+  # mints one small membership resource per (part, page) pair that does.
+  part_page_position:
+    sources:
+      - ['partpage.tsv~csv']
+    s: bhl:part/$(PartID)/page-position/$(PageID)
+    po:
+      - [a, bhlv:PagePosition]
+      - [bhlv:part, bhl:part/$(PartID)~iri]
+      - [bhlv:page, bhl:page/$(PageID)~iri]
+      - [bhlv:sequenceOrder, $(SequenceOrder), xsd:integer]

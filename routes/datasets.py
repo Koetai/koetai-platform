@@ -1,16 +1,16 @@
 """Dataset view, RDF upload, SPARQL proxy."""
 import json
 import os
-import shutil
 import uuid
 from pathlib import Path
 from flask import (Blueprint, render_template, request, redirect,
-                   url_for, flash, jsonify, Response)
+                   url_for, flash, jsonify)
 from werkzeug.utils import secure_filename
 from flask_login import login_required, current_user
+from routes.sparql import proxy_query
 import config
 from services.db import get_db
-from services import triplestore, owl_service, job_runner, sparql_http
+from services import bulk_loader, triplestore, owl_service, job_runner, sparql_http
 
 
 def _schema_from_file(path: Path):
@@ -76,6 +76,7 @@ def view(owner_orcid=None, slug=None):
     git_count    = db.execute("SELECT COUNT(*) FROM github_sources WHERE dataset_id=?", (ds["id"],)).fetchone()[0]
     web_count    = db.execute("SELECT COUNT(*) FROM web_sources WHERE dataset_id=?", (ds["id"],)).fetchone()[0]
     return render_template("dataset.html", ds=ds,
+                           delete_job=job_runner.latest_delete(ds["id"]),
                            shape_count=shape_count,
                            source_counts={"git": git_count, "web": web_count})
 
@@ -127,7 +128,13 @@ def upload_page(owner_orcid, slug):
     from services import jena_service
     return render_template("upload.html", ds=ds,
                            jena_available=jena_service.is_available(),
-                           max_upload_mb=config.MAX_UPLOAD_MB)
+                           max_upload_mb=config.MAX_UPLOAD_MB,
+                           # Offered only when an agent is actually running, only
+                           # to an admin, and only for the store the agent loads:
+                           # a fast load stops that store.
+                           bulk_loader=(bulk_loader.is_available()
+                                        and current_user.is_admin
+                                        and ds["platform"] == bulk_loader.STORE_PLATFORM))
 
 
 @bp.route("/<owner_orcid>/<slug>/mapping", methods=["GET"])
@@ -290,6 +297,70 @@ def upload(owner_orcid, slug):
     return jsonify({"job_id": job_id, "graph": graph_uri})
 
 
+@bp.route("/<owner_orcid>/<slug>/bulk-load", methods=["POST"])
+@login_required
+def bulk_load(owner_orcid, slug):
+    """Hand an already-uploaded file to the loader agent.
+
+    Admin-only, because the store is stopped for the duration and every
+    dataset's endpoint goes down with it — that is a decision about the
+    platform, not about one dataset. Note this is not the security boundary:
+    an attacker running code in this app would not come through here at all.
+    What bounds the agent is the agent (deploy/loader-agent/agent.sh).
+    """
+    ds = _get_dataset_or_404(owner_orcid, slug)
+    if not ds or ds["user_id"] != current_user.id:
+        return jsonify({"error": "Not found or not authorized"}), 403
+    if not current_user.is_admin:
+        return jsonify({"error": "A fast load stops the triplestore, so every dataset "
+                                 "goes offline while it runs. Only an admin can start one."}), 403
+    if not bulk_loader.is_available():
+        return jsonify({"error": "The bulk loader is not running on this server."}), 501
+    # The agent is configured with one store's container and volume. Loading a
+    # Fuseki dataset through it would write the triples into Oxigraph under that
+    # dataset's graph URI — the wrong store, and invisible to the dataset that
+    # asked for them.
+    if ds["platform"] != bulk_loader.STORE_PLATFORM:
+        return jsonify({"error": f"The bulk loader serves {bulk_loader.STORE_PLATFORM} "
+                                 f"datasets; this one is on {ds['platform']}."}), 400
+
+    f = request.files.get("rdf_file")
+    if not f:
+        return jsonify({"error": "No file provided"}), 400
+    if not bulk_loader.rdf_format(f.filename):
+        return jsonify({"error": "The bulk loader reads .nt, .nq and .ttl, "
+                                 "optionally gzipped."}), 400
+
+    upload_dir = config.UPLOAD_DIR / str(current_user.id) / slug
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    file_path = upload_dir / f"{uuid.uuid4().hex}_{secure_filename(f.filename)}"
+    f.save(str(file_path))
+
+    optimise = request.form.get("optimise") == "true"
+    # The same "Replace existing data" checkbox the ordinary upload reads. It
+    # used to be ignored here, silently: the box sits directly above the button,
+    # so a fast load appended while the page said it would replace.
+    replace = request.form.get("replace_data") == "true"
+    ok, result = bulk_loader.submit(file_path, ds["graph_base"] + "/data",
+                                    optimise=optimise, replace=replace)
+    if not ok:
+        file_path.unlink(missing_ok=True)
+        return jsonify({"error": result}), 500
+    return jsonify({"request_id": result})
+
+
+@bp.route("/<owner_orcid>/<slug>/bulk-load/status/<request_id>")
+@login_required
+def bulk_load_status(owner_orcid, slug, request_id):
+    ds = _get_dataset_or_404(owner_orcid, slug)
+    if not ds or ds["user_id"] != current_user.id or not current_user.is_admin:
+        return jsonify({"error": "Not authorized"}), 403
+    st = bulk_loader.status(request_id)
+    if st is None:
+        return jsonify({"status": "queued"})
+    return jsonify(st)
+
+
 @bp.route("/<owner_orcid>/<slug>/upload/status/<job_id>")
 @login_required
 def upload_status(owner_orcid, slug, job_id):
@@ -324,50 +395,24 @@ def sparql_endpoint(owner_orcid, slug):
         wants_html = "text/html" in request.headers.get("Accept", "")
         if not query or wants_html:
             return render_template("yasgui.html", ds=ds, preload_query=query)
+    elif request.mimetype == "application/sparql-query":
+        # SPARQL 1.1 Protocol gives two ways to POST a query: form-encoded with
+        # a "query" field (2.1.2), and the query as the raw request body under
+        # this content type (2.1.3). Only the form was read, so every client
+        # using the direct form got "No query provided" — including QLever's
+        # SERVICE, which is how a federated query arrives here at all. Koetai
+        # sends queries to its own stores this way (sparql_http.py), so it
+        # spoke the protocol outbound while refusing it inbound.
+        query = request.get_data(as_text=True)
     else:
         query = request.form.get("query", "")
 
     if not query:
         return jsonify({"error": "No query provided"}), 400
 
-    ts = triplestore.get(ds)
-    scope = triplestore.dataset_scope(ds)
-
-    # Federation and QLever stores only offer the parsed-JSON interface.
-    raw = getattr(ts, "sparql_query_raw", None)
-    if raw is None:
-        ok, result = ts.sparql_query(query, graphs=scope)
-        return jsonify(result), (200 if ok else 500)
-
-    # Return what the client asked for, in the form the store produced it.
-    # Forcing results JSON on everything meant DESCRIBE and CONSTRUCT could not
-    # work at all: they return a graph, the store answered 406, and the client
-    # was told its Accept header was wrong when it had never set one.
-    accept = sparql_http.accept_for(query, request.headers.get("Accept", ""))
-    ok, body, content_type, status = raw(query, graphs=scope, accept=accept)
-    if not ok:
-        # Keep the JSON error shape the editor expects, but carry the store's
-        # own message and status rather than flattening everything to 500.
-        return jsonify({"error": body.decode("utf-8", "replace").strip()}), status
-    return Response(body, status=200, content_type=content_type)
+    return proxy_query(triplestore.get(ds), query, triplestore.dataset_scope(ds))
 
 
-
-def _remove_upload_dir(ds):
-    """Delete the dataset's uploaded source files along with the dataset.
-
-    Deleting a dataset used to drop its graphs and its database row and leave
-    every file that had ever been uploaded to it on disk, unreferenced and
-    invisible — the only trace being a directory named after a slug that no
-    longer existed.
-    """
-    target = (config.UPLOAD_DIR / str(ds["user_id"]) / ds["slug"]).resolve()
-    root   = config.UPLOAD_DIR.resolve()
-    # A slug is constrained at creation, but resolve-and-check is cheap and this
-    # is an rmtree.
-    if root not in target.parents or not target.is_dir():
-        return
-    shutil.rmtree(target, ignore_errors=True)
 
 
 @bp.route("/<owner_orcid>/<slug>/delete", methods=["POST"])
@@ -378,39 +423,12 @@ def delete(owner_orcid, slug):
         flash("Not found or not authorized.", "error")
         return redirect(url_for("dashboard.index"))
 
-    # Drop the data before the row that records where it lives. A failure here
-    # used to be discarded, so a dataset whose backend was slow or down lost its
-    # row and kept its triples — orphaned in the store with nothing left naming
-    # them. Stop instead, unless the user has explicitly chosen to go ahead:
-    # a store that is briefly down should be waited for, but one that has been
-    # retired for good would otherwise make its datasets undeletable.
+    # The drop runs as a background job (see job_runner._process_delete): on a
+    # large dataset it takes as long as the load did, and a request waiting for
+    # it was abandoned by the browser while the store carried on. `force` is the
+    # second step offered when a delete has failed, for a store retired for good.
     force = request.form.get("force") == "1"
-    ts = triplestore.get(ds)
-    failed = []
-    for suffix in triplestore.GRAPH_SUFFIXES:
-        ok, msg = ts.drop_graph(ds["graph_base"] + suffix)
-        if not ok:
-            failed.append(f"{ds['graph_base']}{suffix}: {msg}")
-
-    if failed and not force:
-        flash("Could not remove this dataset's data from the triplestore, so "
-              "nothing was deleted. " + "; ".join(failed)[:400], "error")
-        return redirect(url_for("datasets.view", owner_orcid=owner_orcid,
-                                slug=slug, undeletable=1))
-
-    _remove_upload_dir(ds)
-
-    db = get_db()
-    db.execute("DELETE FROM datasets WHERE id = ?", (ds["id"],))
-    db.commit()
-    if failed:
-        # Deleted on the user's say-so with the data still in the store. Name the
-        # graphs: this row was the only record of where they are.
-        flash(f"Dataset '{ds['label']}' deleted, but its data could not be "
-              f"removed from the triplestore and is still there. Clean up by "
-              f"hand if the store comes back: "
-              + ", ".join(ds["graph_base"] + sfx for sfx in triplestore.GRAPH_SUFFIXES),
-              "warning")
-    else:
-        flash(f"Dataset '{ds['label']}' deleted.", "success")
+    job_runner.submit_delete(ds["id"], current_user.id, ds["graph_base"], force=force)
+    flash(f"Deleting '{ds['label']}'. A large dataset takes a while; it leaves "
+          f"this list when it is gone.", "info")
     return redirect(url_for("dashboard.index"))

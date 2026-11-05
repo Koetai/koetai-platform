@@ -20,7 +20,10 @@ def index():
         """SELECT d.*,
              (SELECT COUNT(*) FROM github_sources WHERE dataset_id=d.id) AS git_count,
              (SELECT COUNT(*) FROM web_sources    WHERE dataset_id=d.id) AS web_count,
-             (SELECT COUNT(*) FROM shapes         WHERE dataset_id=d.id) AS shape_count
+             (SELECT COUNT(*) FROM shapes         WHERE dataset_id=d.id) AS shape_count,
+             (SELECT status FROM upload_jobs WHERE dataset_id=d.id
+                AND kind IN ('delete','delete-force')
+                ORDER BY created_at DESC LIMIT 1)                       AS delete_status
            FROM datasets d
            WHERE user_id = ? ORDER BY created_at DESC""",
         (current_user.id,)

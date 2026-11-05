@@ -1,0 +1,98 @@
+# BHL RDF shape — the stage 03 validation gate.
+#
+# Scoped to what stage 02 (materialize) produces. dwc:scientificNameID from
+# the Wikidata reconciliation pass (stage 04) runs *after* this gate, so it
+# is deliberately not asserted here — re-running rudof against this same
+# shape after stage 04 would need a second, separate shape for that.
+#
+# Each shape positively asserts the fix for one of Rod Page's issues, so a
+# violation here is a regression of a *named* issue, not a vague failure:
+#   <Creator>      -> issue #6, structurally (see note below)
+#   <HasCreator>   -> issue #5 (creator is IRI-valued on both title and part)
+#   <PagePosition> -> issue #4 (part->page order is on the graph, not lost)
+#
+# Issues #1 (DOI '%2F') and #6's URI-scheme check ("is this IRI shaped like
+# bhl:creator/N") are deliberately NOT done here as ShEx IRI regex facets —
+# tested directly against this rudof build (AND-combining a pattern facet
+# with a shape body reliably fails to validate, confirmed on both the
+# Creator and Title shapes) — string-content pattern matching on an IRI is
+# arguably a grep's job before it's a graph-shape validator's job anyway.
+# Stage 03 runs both as a plain grep immediately before this gate.
+#
+# No CLOSED shapes here — shapes are open by default in ShEx, so there is
+# nothing this gate should reject just for having an extra, unmodeled
+# property; it only asserts what must be present and correctly shaped.
+
+PREFIX bhl:     <https://www.biodiversitylibrary.org/>
+PREFIX bhlv:    <https://www.biodiversitylibrary.org/vocab/>
+PREFIX dcterms: <http://purl.org/dc/terms/>
+PREFIX bibo:    <http://purl.org/ontology/bibo/>
+PREFIX foaf:    <http://xmlns.com/foaf/0.1/>
+PREFIX owl:     <http://www.w3.org/2002/07/owl#>
+PREFIX xsd:     <http://www.w3.org/2001/XMLSchema#>
+
+# Issue #6: every creator is a real, dereferenceable biodiversitylibrary.org
+# URI. The IRI pattern facet itself is the assertion — a urn:bhl:creator:N
+# node fails to conform to this shape by construction, not by a property
+# check.
+<Creator> {
+  a                   [foaf:Agent] ;
+  foaf:name           xsd:string ;
+  bhlv:creatorType    xsd:string * ;
+  dcterms:identifier  xsd:string * ;
+  owl:sameAs          IRI *
+}
+
+# Issue #5: dcterms:creator is IRI-valued (@<Creator>) in both <Title> and
+# <Part> below — inlined in each rather than factored into a shared shape
+# and referenced via ShEx's inclusion operator (&<Label>), which this
+# rudof build doesn't implement yet ("Not implemented yet: TripleExprRef",
+# confirmed by testing this file directly against it). Duplicated one line
+# instead of depending on an unsupported feature; the point — same @<Creator>
+# value expression in both places — still holds.
+<Title> {
+  dcterms:creator     @<Creator> * ;
+  a                   [bhlv:Title] ;
+  dcterms:title       xsd:string ;
+  dcterms:language    xsd:string ? ;
+  dcterms:issued      xsd:gYear ? ;
+  dcterms:identifier  xsd:string * ;
+  owl:sameAs          IRI *
+}
+
+<Part> {
+  dcterms:creator     @<Creator> * ;
+  a                   [bibo:Article] ;
+  dcterms:title       xsd:string ;
+  # Optional, not required: confirmed against BHL's own part.tsv — some
+  # parts (e.g. PartID 129098) genuinely have no ItemID at all, so no
+  # dcterms:isPartOf triple gets emitted. A real data gap, not a mapping bug.
+  dcterms:isPartOf    IRI ? ;
+  bhlv:hasPage        IRI * ;
+  dcterms:identifier  xsd:string * ;
+  owl:sameAs          IRI *
+}
+
+# Issue #4: a part->page relation that carries its own order, not just an
+# unordered bhlv:hasPage set.
+<PagePosition> {
+  a                   [bhlv:PagePosition] ;
+  bhlv:part           IRI ;
+  bhlv:page           IRI ;
+  bhlv:sequenceOrder  xsd:integer
+}
+
+<Item> {
+  a                   [bibo:Book] ;
+  # One or more, not exactly one: confirmed against BHL's own item.tsv —
+  # some ItemIDs (e.g. 44226) appear on multiple rows with different
+  # TitleIDs, so the item legitimately gets more than one isPartOf triple.
+  dcterms:isPartOf    IRI + ;
+  bhlv:institution    xsd:string ?
+}
+
+<Page> {
+  a                   [bibo:Page] ;
+  dcterms:isPartOf    IRI ;
+  bhlv:sequenceOrder  xsd:integer ?
+}
