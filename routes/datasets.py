@@ -394,6 +394,15 @@ def sparql_endpoint(owner_orcid, slug):
         wants_html = "text/html" in request.headers.get("Accept", "")
         if not query or wants_html:
             return render_template("yasgui.html", ds=ds, preload_query=query)
+    elif request.mimetype == "application/sparql-query":
+        # SPARQL 1.1 Protocol gives two ways to POST a query: form-encoded with
+        # a "query" field (2.1.2), and the query as the raw request body under
+        # this content type (2.1.3). Only the form was read, so every client
+        # using the direct form got "No query provided" — including QLever's
+        # SERVICE, which is how a federated query arrives here at all. Koetai
+        # sends queries to its own stores this way (sparql_http.py), so it
+        # spoke the protocol outbound while refusing it inbound.
+        query = request.get_data(as_text=True)
     else:
         query = request.form.get("query", "")
 
