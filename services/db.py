@@ -30,6 +30,7 @@ _ADDED_COLUMNS = {
         ("source_url", "TEXT"),
         ("source_label", "TEXT"),
         ("web_source_file_id", "INTEGER"),
+        ("kind", "TEXT NOT NULL DEFAULT 'load'"),
     ],
 }
 

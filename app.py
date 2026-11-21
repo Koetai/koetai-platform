@@ -67,6 +67,7 @@ from routes.sparqlist import bp as sparqlist_bp
 from routes.github      import bp as github_bp
 from routes.web_sources import bp as web_sources_bp
 from routes.fdp        import bp as fdp_bp
+from routes.sparql     import bp as sparql_bp, store_summaries
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(dashboard_bp)
@@ -77,6 +78,7 @@ app.register_blueprint(sparqlist_bp)
 app.register_blueprint(github_bp)
 app.register_blueprint(web_sources_bp)
 app.register_blueprint(fdp_bp)
+app.register_blueprint(sparql_bp)
 
 # ── Main routes ───────────────────────────────────────────────────────────────
 @app.route("/")
@@ -136,7 +138,8 @@ def endpoints():
                            "datasets": []}
         owners[key]["datasets"].append(dict(r))
 
-    return render_template("endpoints.html", owners=list(owners.values()))
+    return render_template("endpoints.html", owners=list(owners.values()),
+                           stores=store_summaries())
 
 
 @app.route("/sparql-editor")
@@ -151,7 +154,8 @@ def sparql_editor():
            WHERE d.is_public = 1
            ORDER BY u.name, d.label""",
     ).fetchall()
-    return render_template("sparql_editor.html", datasets=[dict(d) for d in datasets])
+    return render_template("sparql_editor.html", datasets=[dict(d) for d in datasets],
+                           stores=store_summaries())
 
 # ── Init ──────────────────────────────────────────────────────────────────────
 app.teardown_appcontext(close_db)

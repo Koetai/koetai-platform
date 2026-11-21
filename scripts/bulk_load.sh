@@ -104,11 +104,40 @@ echo "graph   : $GRAPH"
 echo "file    : $FILE  ($(du -h "$FILE" | cut -f1), $FORMAT)"
 echo "volume  : $VOLUME"
 echo
+# Stopping the store under a running upload kills it: the load is an open HTTP
+# request, and the job dies with "Remote end closed connection without
+# response". Easy to do by accident, and the damage lands on someone else's
+# import, so refuse rather than warn.
+RUNNING="$(docker compose exec -T koetai python -c "
+import sqlite3, config
+c = sqlite3.connect(config.DB_PATH); c.row_factory = sqlite3.Row
+rows = c.execute(\"SELECT d.slug, j.phase FROM upload_jobs j \"
+                 \"LEFT JOIN datasets d ON d.id = j.dataset_id \"
+                 \"WHERE j.status = 'running'\").fetchall()
+for r in rows:
+    print(f\"{r['slug']} ({r['phase']})\")" < /dev/null | tr -d '\r')"
+if [ -n "$RUNNING" ]; then
+  echo "There is an upload in progress; stopping the store now would kill it:" >&2
+  echo "$RUNNING" | sed 's/^/  /' >&2
+  echo "Wait for it to finish, or check the dataset's Upload tab." >&2
+  exit 1
+fi
+
 echo "Oxigraph will be stopped while this runs — the endpoint is unavailable until it finishes."
 if [ "$ASSUME_YES" -eq 0 ]; then
   printf "Continue? [y/N] "
   # from the terminal, not stdin: stdin may be the file being piped in
-  if [ -r /dev/tty ]; then read -r reply < /dev/tty; else read -r reply || reply=""; fi
+  # /dev/tty exists but is not usable when there is no controlling terminal
+  # (a cron job, a pipeline), so try it and fall back rather than dying.
+  reply=""
+  # /dev/tty exists but is not usable without a controlling terminal, and the
+  # redirect itself is what fails there — so test it before relying on it.
+  if { : < /dev/tty; } 2>/dev/null; then
+    read -r reply < /dev/tty || reply=""
+  else
+    read -r reply || reply=""
+  fi
+  [ -n "$reply" ] || { echo "no answer (use --yes for a non-interactive run); aborted"; exit 0; }
   case "$reply" in [yY]*) ;; *) echo "aborted"; exit 0 ;; esac
 fi
 

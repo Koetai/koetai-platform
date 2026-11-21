@@ -12,6 +12,7 @@ loads bulk data by building an index offline. See services/qlever.py.
 import re
 from pathlib import Path
 from typing import NamedTuple, Optional
+from urllib.parse import urlencode
 
 import requests
 
@@ -22,28 +23,49 @@ class Scope(NamedTuple):
     """The set of graphs a query is allowed to see.
 
     `default` becomes the query's default graph, so a plain `?s ?p ?o` reads it.
-    `named` is what GRAPH can range over. Both map onto the SPARQL 1.1 Protocol
-    `default-graph-uri` / `named-graph-uri` parameters, which every compliant
-    store enforces server-side.
+    When it lists several graphs the store merges them into one default graph,
+    which is how a query spans datasets. `named` is what GRAPH can range over.
+    Both map onto the SPARQL 1.1 Protocol `default-graph-uri` /
+    `named-graph-uri` parameters, which every compliant store enforces
+    server-side.
     """
-    default: Optional[str] = None
+    default: tuple = ()
     named: tuple = ()
 
 
-def build_scope(default: str = None, named=()) -> Scope:
-    return Scope(default=default, named=tuple(named))
+def build_scope(default=None, named=()) -> Scope:
+    """`default` is one graph URI or several."""
+    if isinstance(default, str):
+        default = (default,)
+    return Scope(default=tuple(default or ()), named=tuple(named))
+
+
+def _scope_fields(graphs: Optional[Scope]) -> dict:
+    # A Scope is a tuple of two fields, so `not graphs` is never true of one,
+    # even an empty one. Sent as is, an empty scope adds no parameters, and a
+    # store with no restriction answers from everything it holds. Refuse it:
+    # no graphs to see means nothing to query, never all of them.
+    if graphs is None:
+        return {}
+    if not graphs.default and not graphs.named:
+        raise ValueError("Empty graph scope: refusing to run an unscoped query.")
+    fields = {}
+    if graphs.default:
+        fields["default-graph-uri"] = list(graphs.default)
+    if graphs.named:
+        fields["named-graph-uri"] = list(graphs.named)
+    return fields
+
+
+# Longest URL-encoded scope sent in the URL; a longer one goes in a form body.
+# Kept well under Oxigraph's 8 KB header limit, which the rest of the request
+# line and headers also count against.
+MAX_SCOPE_IN_URL = 4000
 
 
 def scoped_body(query: str, graphs: Optional[Scope]) -> dict:
     """Form body for a query, adding protocol-level graph restrictions."""
-    body = {"query": query}
-    if not graphs:
-        return body
-    if graphs.default:
-        body["default-graph-uri"] = graphs.default
-    if graphs.named:
-        body["named-graph-uri"] = list(graphs.named)
-    return body
+    return {"query": query, **_scope_fields(graphs)}
 
 
 def scoped_params(graphs: Optional[Scope]) -> dict:
@@ -51,19 +73,12 @@ def scoped_params(graphs: Optional[Scope]) -> dict:
 
     The companion to scoped_body for stores queried with "query via POST
     directly" (SPARQL 1.1 Protocol 2.1.3): the query travels as the raw body, so
-    the graph parameters have to go in the URL. Oxigraph 0.5 additionally
-    rejects a repeated named-graph-uri in a form-encoded body — it reports
-    "'named-graph-uri' cannot be set both in the body and the URL query" — so
-    the URL is also the only encoding it accepts for a multi-graph scope.
+    the graph parameters have to go in the URL. An earlier Oxigraph 0.5 also
+    rejected a repeated named-graph-uri in a form-encoded body, reporting
+    "'named-graph-uri' cannot be set both in the body and the URL query";
+    0.5.11 accepts it, which _post_query relies on for large scopes.
     """
-    if not graphs:
-        return {}
-    params = {}
-    if graphs.default:
-        params["default-graph-uri"] = graphs.default
-    if graphs.named:
-        params["named-graph-uri"] = list(graphs.named)
-    return params
+    return _scope_fields(graphs)
 
 
 RDF_CONTENT_TYPES = {
@@ -158,6 +173,29 @@ class SparqlHttpStore:
     def _url(self, path: str) -> str:
         return f"{self.base_url}{path}"
 
+    def _post_query(self, query: str, graphs, accept: str, timeout: int = None):
+        """POST a query with its graph restrictions, in whichever form fits.
+
+        By default the query is the request body and the restrictions are URL
+        parameters ("query via POST directly"), the form these stores have been
+        run with all along. But a scope over many datasets makes for a URL
+        longer than some stores accept: Oxigraph refuses any request whose
+        headers pass 8 KB, which is around fifty datasets. Past
+        MAX_SCOPE_IN_URL the whole request goes form-encoded instead, query and
+        graphs together in the body, which has no such limit. Oxigraph 0.5.11,
+        the version Koetai requires, accepts repeated graph parameters there.
+        """
+        params = scoped_params(graphs)
+        if len(urlencode(params, doseq=True)) <= MAX_SCOPE_IN_URL:
+            kw = {"params": params, "data": query.encode(),
+                  "headers": {"Content-Type": "application/sparql-query",
+                              "Accept": accept}}
+        else:
+            kw = {"data": scoped_body(query, graphs),
+                  "headers": {"Accept": accept}}
+        return requests.post(self._url(self.query_path), auth=self.auth,
+                             timeout=timeout or self.query_timeout, **kw)
+
     def sparql_query(self, query: str, graphs: "Scope" = None, timeout: int = None, **kw) -> tuple[bool, dict]:
         """Run a query, optionally confined to `graphs` (see build_scope).
 
@@ -166,19 +204,7 @@ class SparqlHttpStore:
         permitted graphs and an explicit GRAPH <other> simply matches nothing.
         """
         try:
-            # "Query via POST directly": the query is the request body and the
-            # graph restrictions are URL parameters. Preferred over posting
-            # everything form-encoded because Oxigraph rejects a repeated
-            # named-graph-uri in the body — see scoped_params.
-            r = requests.post(
-                self._url(self.query_path),
-                params=scoped_params(graphs),
-                data=query.encode(),
-                headers={"Content-Type": "application/sparql-query",
-                         "Accept": "application/sparql-results+json"},
-                auth=self.auth,
-                timeout=timeout or self.query_timeout,
-            )
+            r = self._post_query(query, graphs, "application/sparql-results+json", timeout)
             if r.status_code < 400:
                 return True, r.json()
             return False, {"error": r.text}
@@ -199,29 +225,21 @@ class SparqlHttpStore:
         """
         accept = accept or RESULTS_ACCEPT
         try:
-            r = requests.post(
-                self._url(self.query_path),
-                params=scoped_params(graphs),
-                data=query.encode(),
-                headers={"Content-Type": "application/sparql-query",
-                         "Accept": accept},
-                auth=self.auth,
-                timeout=timeout or self.query_timeout,
-            )
+            r = self._post_query(query, graphs, accept, timeout)
             return (r.status_code < 400, r.content,
                     r.headers.get("Content-Type", "application/octet-stream"),
                     r.status_code)
         except Exception as e:
             return False, str(e).encode(), "text/plain; charset=utf-8", 502
 
-    def sparql_update(self, query: str, **kw) -> tuple[bool, str]:
+    def sparql_update(self, query: str, timeout: int = None, **kw) -> tuple[bool, str]:
         try:
             r = requests.post(
                 self._url(self.update_path),
                 data=query.encode(),
                 headers={"Content-Type": "application/sparql-update"},
                 auth=self.auth,
-                timeout=self.query_timeout,
+                timeout=timeout or self.query_timeout,
             )
             return r.status_code < 400, r.text
         except Exception as e:
@@ -231,8 +249,19 @@ class SparqlHttpStore:
         """Append a file into a named graph (Graph Store Protocol POST)."""
         return self._gsp_write(requests.post, graph_uri, file_path, "Loaded into", progress)
 
-    def replace_graph(self, graph_uri: str, file_path: Path, progress=None, **kw) -> tuple[bool, str]:
-        """Replace a named graph atomically (Graph Store Protocol PUT)."""
+    def replace_graph(self, graph_uri: str, file_path: Path, progress=None,
+                      drain_progress=None, **kw) -> tuple[bool, str]:
+        """Replace a named graph (Graph Store Protocol PUT).
+
+        A PUT over a large graph has to delete everything already there in the
+        same transaction, which is the unbounded drop that _drain exists to
+        avoid. So the old contents are drained first, and the PUT replaces only
+        what is left. Atomic for a small graph; for a large one the old data is
+        gone before the new arrives.
+        """
+        ok, msg = self._drain(graph_uri, drain_progress)
+        if not ok:
+            return False, f"Could not remove the previous data: {msg}"
         return self._gsp_write(requests.put, graph_uri, file_path, "Replaced", progress)
 
     # Formats where one line is one statement, so the file can be split without
@@ -324,11 +353,50 @@ class SparqlHttpStore:
             return False, str(e)
         return True, f"{verb} <{graph_uri}> ({total:,} statements)"
 
-    def drop_graph(self, graph_uri: str, **kw) -> tuple[bool, str]:
-        # Dropping is a write across as many triples as loading them was, so it
-        # gets the load timeout rather than a short one. At 30s a multi-million
-        # triple graph timed out client-side while the store went on to complete
-        # it, leaving the caller believing a delete had failed that had not.
+    def _drain(self, graph_uri: str, progress=None) -> tuple[bool, str]:
+        """Delete a graph's triples in batches until fewer than one batch remain.
+
+        Dropping a graph is one transaction, which the store builds in memory
+        before it commits, so its peak cost scales with the graph. On a large
+        Oxigraph dataset that meant a delete that never finished: memory climbed
+        until the store was killed, nothing was removed, and every retry started
+        another. Deleting a bounded batch at a time keeps each transaction small,
+        at the cost of atomicity: a failure part-way leaves the graph partly
+        emptied, and repeating the delete finishes the job.
+
+        A small graph costs one ASK and is left for the caller's single write.
+        """
+        n = config.RDF_LOAD_BATCH_LINES
+        if n <= 0:
+            return True, "batching disabled"
+        g = f"<{graph_uri}>"
+        more_than_a_batch = (f"ASK {{ {{ SELECT * WHERE {{ GRAPH {g} {{ ?s ?p ?o }} }} "
+                             f"OFFSET {n} LIMIT 1 }} }}")
+        delete_batch = (f"DELETE {{ GRAPH {g} {{ ?s ?p ?o }} }} WHERE {{ "
+                        f"{{ SELECT ?s ?p ?o WHERE {{ GRAPH {g} {{ ?s ?p ?o }} }} LIMIT {n} }} }}")
+        removed = 0
+        while True:
+            ok, result = self.sparql_query(more_than_a_batch, timeout=self.load_timeout)
+            if not ok:
+                return False, str(result.get("error", result))[:300]
+            if not result.get("boolean"):
+                return True, f"removed {removed:,} statements in batches"
+            ok, msg = self.sparql_update(delete_batch, timeout=self.load_timeout)
+            if not ok:
+                return False, (f"{msg[:300]} — after {removed:,} statements. "
+                               f"Deleting again carries on from here.")
+            removed += n
+            if progress:
+                progress(removed)
+
+    def drop_graph(self, graph_uri: str, progress=None, **kw) -> tuple[bool, str]:
+        ok, msg = self._drain(graph_uri, progress)
+        if not ok:
+            return False, msg
+        # What _drain leaves is under one batch, but the drop still gets the load
+        # timeout: at 30s a store that was slow for any reason timed out
+        # client-side and went on to complete it, leaving the caller believing a
+        # delete had failed that had not.
         try:
             r = requests.delete(
                 self._url(self.gsp_path),

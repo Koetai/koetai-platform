@@ -70,12 +70,31 @@ def callback():
             return redirect(url_for("index"))
         user = db.execute("SELECT * FROM users WHERE orcid_id = ?", (orcid_id,)).fetchone()
 
+    # Promote an existing account that has since been named an administrator, so
+    # adding an ORCID to the setting is enough to recover an instance whose only
+    # admin has gone — without editing the database by hand.
+    if orcid_id in config.ADMIN_ORCIDS and not user["is_admin"]:
+        db.execute("UPDATE users SET is_admin = 1 WHERE id = ?", (user["id"],))
+        db.commit()
+        user = db.execute("SELECT * FROM users WHERE orcid_id = ?", (orcid_id,)).fetchone()
+
     login_user(User.from_row(user))
     return redirect(url_for("dashboard.index"))
 
 
 def _register_with_invite(db, orcid_id, name):
-    """community mode: a new user needs an unused invitation code in session."""
+    """community mode: a new user needs an unused invitation code in session.
+
+    Except the instance's own administrators, who are how the first account gets
+    made. Otherwise a fresh install is a closed loop — registering needs an
+    invite, invites are issued by an admin, and there is no first admin.
+    """
+    if orcid_id in config.ADMIN_ORCIDS:
+        db.execute("INSERT INTO users (orcid_id, name, is_admin) VALUES (?, ?, 1)",
+                   (orcid_id, name))
+        db.commit()
+        return True
+
     invite_code = session.pop("invite_code", None)
     if not invite_code:
         flash("An invitation code is required to register. Please use an invite link.", "warning")

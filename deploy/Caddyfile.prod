@@ -1,0 +1,32 @@
+# Caddy in front of Koetai. Certificates are obtained and renewed automatically,
+# so there is nothing to run by hand — but that only works if the DNS for this
+# name already resolves to this host and ports 80 and 443 reach it.
+{$KOETAI_DOMAIN} {
+	encode zstd gzip
+
+	# Uploads are the reason this needs saying. Caddy buffers a request body to
+	# decide what to do with it, and the default ceiling is far below the files
+	# this platform exists for — an upload would be refused by the proxy before
+	# the app ever saw it, with an error that looks nothing like "too large".
+	request_body {
+		max_size {$KOETAI_MAX_UPLOAD:4096}MB
+	}
+
+	reverse_proxy koetai:3002 {
+		# A load runs inside the request that starts it only for small files;
+		# large ones are handed to a background job. Still, an upload of several
+		# gigabytes is one long request, and the default proxy timeouts are
+		# measured in minutes.
+		transport http {
+			read_timeout 3h
+			write_timeout 3h
+		}
+	}
+
+	log {
+		output file /data/access.log {
+			roll_size 20mb
+			roll_keep 5
+		}
+	}
+}
